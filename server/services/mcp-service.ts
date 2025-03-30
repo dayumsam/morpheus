@@ -95,7 +95,8 @@ export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {que
 
 
   // Calculate similarity scores and filter
-  noteEmbeddings.forEach(({ note, embedding }) => {
+  // Need to use for...of loop instead of forEach since we need to use await inside the loop
+  for (const { note, embedding } of noteEmbeddings) {
     const similarity = cosineSimilarity(queryVector, embedding);
     const noteTags = await storage.getNoteTagsByNoteId(note.id);
     if (similarity > 0 || tags.some(t => noteTags.map(nt => nt.name).includes(t))) {
@@ -105,9 +106,10 @@ export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {que
         relevanceScore: similarity
       });
     }
-  });
+  }
 
-  linkEmbeddings.forEach(({ link, embedding }) => {
+  // Need to use for...of loop instead of forEach since we need to use await inside the loop
+  for (const { link, embedding } of linkEmbeddings) {
     const similarity = cosineSimilarity(queryVector, embedding);
     const linkTags = await storage.getLinkTagsByLinkId(link.id);
     if (similarity > 0 || tags.some(t => linkTags.map(lt => lt.name).includes(t))) {
@@ -117,7 +119,7 @@ export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {que
         relevanceScore: similarity
       });
     }
-  });
+  }
 
   // Sort by relevance and limit results
   results.notes.sort((a, b) => b.relevanceScore - a.relevanceScore);
