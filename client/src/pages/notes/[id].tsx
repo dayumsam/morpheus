@@ -53,7 +53,11 @@ export default function NotePage() {
         title: "Note deleted",
         description: "Your note has been deleted successfully",
       });
+      // Invalidate all relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/notes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/graph'] });
+      // Navigate back to notes page
       setLocation('/notes');
     },
     onError: (error) => {

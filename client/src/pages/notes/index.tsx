@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ interface Tag {
 
 export default function NotesPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -99,10 +100,21 @@ export default function NotesPage() {
 
     try {
       await apiRequest("DELETE", `/api/notes/${deletingNoteId}`);
+      
+      // Invalidate relevant queries to trigger refetching
+      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/graph"] });
+      
       toast({
         title: "Note deleted",
         description: "Your note has been deleted successfully",
       });
+      
+      // Redirect to notes page if we're on a specific note page
+      if (location.startsWith(`/notes/${deletingNoteId}`)) {
+        setLocation('/notes');
+      }
     } catch (error: any) {
       toast({
         title: "Error",
