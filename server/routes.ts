@@ -26,6 +26,7 @@ import {
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { searchKnowledgeBase, mcpQuerySchema } from "./services/mcp-service";
+import { PlatformMCP } from "./services/platform-mcp";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Error handling middleware
