@@ -358,6 +358,17 @@ export default function TiptapEditor({
     },
   });
 
+  // Update editor content when the content prop changes
+  useEffect(() => {
+    if (editor && content) {
+      // Only update if the content actually changed and is different from current editor content
+      const currentContent = editor.getHTML();
+      if (content !== currentContent) {
+        editor.commands.setContent(content);
+      }
+    }
+  }, [editor, content]);
+
   // Add keyboard shortcut for frontmatter
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
