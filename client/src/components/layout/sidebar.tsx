@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import morpheusLogo from "@assets/morpheus_logo_only.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -121,9 +122,15 @@ export default function Sidebar({ className = "" }: SidebarProps) {
       {/* Sidebar Header */}
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white transition-colors duration-200">
-            <Network className="w-4 h-4" />
-          </div>
+          <Link to="/">
+            <div className="w-8 h-8 flex items-center justify-center">
+              <img 
+                src={morpheusLogo} 
+                alt="Morpheus Logo" 
+                className="h-8 w-8 object-contain"
+              />
+            </div>
+          </Link>
           {!collapsed && (
             <h1 className="ml-3 font-semibold text-lg text-gray-800">
               Morpheus
