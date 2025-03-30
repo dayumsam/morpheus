@@ -1,16 +1,10 @@
 
-import { searchKnowledgeBase, mcpQuerySchema } from "./mcp-service";
+import { searchKnowledgeBase, type MCPResponse } from "./mcp-service";
 import { storage } from "../storage";
-import { z } from "zod";
-
-// Schema for tag search
-const tagSearchSchema = z.object({
-  query: z.string(),
-  limit: z.number().optional().default(10)
-});
+import type { Tag } from "@shared/schema";
 
 export class PlatformMCP {
-  async getTags(query: string) {
+  async getTags(query: string): Promise<MCPResponse> {
     try {
       const tags = await storage.getTags();
       
@@ -21,46 +15,46 @@ export class PlatformMCP {
         return tagName.includes(searchQuery) || searchQuery.includes(tagName);
       });
 
-      return matchingTags;
+      return {
+        status: "success",
+        data: {
+          tags: matchingTags.map(tag => ({
+            name: tag.name,
+            relevance: query.toLowerCase().includes(tag.name.toLowerCase()) ? 1.0 : 0.5
+          }))
+        }
+      };
     } catch (err) {
-      console.error("Error getting tags:", err);
-      return [];
+      return {
+        status: "error",
+        error: err instanceof Error ? err.message : "Unknown error occurred"
+      };
     }
   }
 
-  async getContext(query: string) {
+  async getContext(query: string): Promise<MCPResponse> {
     try {
       // First get relevant tags
-      const tags = await this.getTags(query);
-      const tagNames = tags.map(t => t.name);
+      const tagsResponse = await this.getTags(query);
+      if (tagsResponse.status === "error") {
+        return tagsResponse;
+      }
+
+      const tagNames = tagsResponse.data.tags.map((t: any) => t.name);
 
       // Search knowledge base with these tags and query
       const results = await searchKnowledgeBase({
         query,
         tags: tagNames,
-        limit: 20 // Get more results for better context
+        limit: 20
       });
 
-      // Format results for Cursor context
-      return {
-        tags: tags.map(tag => ({
-          name: tag.name,
-          relevance: query.toLowerCase().includes(tag.name.toLowerCase()) ? 1.0 : 0.5
-        })),
-        notes: results.notes.map(note => ({
-          content: `Title: ${note.title}\n\n${note.content}`,
-          relevance: note.relevanceScore,
-          tags: note.tags.map(t => t.name).join(', ')
-        })),
-        links: results.links.map(link => ({
-          content: `${link.title}\n${link.url}\n${link.description || ''}\n${link.summary || ''}`,
-          relevance: link.relevanceScore,
-          tags: link.tags.map(t => t.name).join(', ')
-        }))
-      };
+      return results;
     } catch (err) {
-      console.error("Error getting context:", err);
-      return { tags: [], notes: [], links: [] };
+      return {
+        status: "error",
+        error: err instanceof Error ? err.message : "Unknown error occurred"
+      };
     }
   }
 }
