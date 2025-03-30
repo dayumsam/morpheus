@@ -38,7 +38,7 @@ export default function NotePage() {
   
   // Fetch note data
   const { data: note, isLoading, error } = useQuery({
-    queryKey: ['/api/notes', noteId],
+    queryKey: [`/api/notes/${noteId}`],
     enabled: !!noteId,
   });
   

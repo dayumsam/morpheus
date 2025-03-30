@@ -66,7 +66,7 @@ export default function NotesPage() {
   });
   
   // Get the selected tag name if a tag is selected
-  const selectedTag = selectedTagId && tags 
+  const selectedTag = selectedTagId && tags && Array.isArray(tags)
     ? tags.find((tag: any) => tag.id === selectedTagId) 
     : null;
   
@@ -93,15 +93,17 @@ export default function NotesPage() {
   };
   
   // Filter notes based on search query and selected tag
-  const filteredNotes = (selectedTagId ? tagNotes : notes)?.filter((note: any) => {
-    if (!note || !searchQuery) return true;
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    return (
-      (note.title && note.title.toLowerCase().includes(lowerCaseQuery)) ||
-      (note.content && typeof note.content === 'string' && 
-       note.content.toLowerCase().includes(lowerCaseQuery))
-    );
-  });
+  const filteredNotes = Array.isArray(selectedTagId ? tagNotes : notes) 
+    ? (selectedTagId ? tagNotes : notes).filter((note: any) => {
+        if (!note || !searchQuery) return true;
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        return (
+          (note.title && note.title.toLowerCase().includes(lowerCaseQuery)) ||
+          (note.content && typeof note.content === 'string' && 
+          note.content.toLowerCase().includes(lowerCaseQuery))
+        );
+      })
+    : [];
   
   // Edit note
   const handleEditNote = (id: number) => {
@@ -176,16 +178,23 @@ export default function NotesPage() {
       )}
       
       {/* Empty state */}
-      {!isLoading && !error && (!notes || notes.length === 0) && (
+      {!isLoading && !error && (!filteredNotes || filteredNotes.length === 0) && (
         <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-          <p className="text-gray-500 mb-6">Start capturing your thoughts and ideas</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {selectedTagId ? "No notes with this tag" : "No notes yet"}
+          </h3>
+          <p className="text-gray-500 mb-6">
+            {selectedTagId 
+              ? "Try selecting a different tag or create a new note with this tag" 
+              : "Start capturing your thoughts and ideas"
+            }
+          </p>
           <Button onClick={() => {
             setEditingNoteId(null);
             setShowNoteForm(true);
           }}>
             <Plus className="h-4 w-4 mr-2" />
-            Create your first note
+            {selectedTagId ? "Create note with this tag" : "Create your first note"}
           </Button>
         </div>
       )}

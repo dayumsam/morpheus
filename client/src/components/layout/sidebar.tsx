@@ -120,7 +120,7 @@ export default function Sidebar({ className = '' }: SidebarProps) {
         </div>
         
         {/* Tags Section */}
-        {!collapsed && tags && tags.length > 0 && (
+        {!collapsed && tags && Array.isArray(tags) && tags.length > 0 && (
           <div className="px-4 py-2 mt-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
