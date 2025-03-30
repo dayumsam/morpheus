@@ -1,0 +1,161 @@
+import { useState } from 'react';
+import { Link, useLocation } from 'wouter';
+import { 
+  Home, 
+  StickyNote, 
+  Link as LinkIcon, 
+  Network, 
+  Lightbulb, 
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  User
+} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+
+interface SidebarProps {
+  className?: string;
+}
+
+export default function Sidebar({ className = '' }: SidebarProps) {
+  const [location] = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Fetch tags for sidebar
+  const { data: tags } = useQuery({
+    queryKey: ['/api/tags'],
+    staleTime: 60 * 1000, // 1 minute
+  });
+  
+  // Define navigation items
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: <Home className="w-5 h-5" /> },
+    { path: '/notes', label: 'All Notes', icon: <StickyNote className="w-5 h-5" /> },
+    { path: '/links', label: 'Saved Links', icon: <LinkIcon className="w-5 h-5" /> },
+    { path: '/graph', label: 'Knowledge Graph', icon: <Network className="w-5 h-5" /> },
+    { path: '/daily-prompts', label: 'Daily Prompts', icon: <Lightbulb className="w-5 h-5" /> },
+  ];
+  
+  // Tag colors
+  const getTagColor = (tagName: string) => {
+    const colors: Record<string, string> = {
+      'Research': 'bg-indigo-500',
+      'Projects': 'bg-green-500',
+      'Ideas': 'bg-red-500',
+      'Reading List': 'bg-yellow-500'
+    };
+    
+    return colors[tagName] || 'bg-gray-500';
+  };
+  
+  return (
+    <div 
+      className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${
+        collapsed ? 'w-16' : 'w-64'
+      } ${className}`}
+    >
+      {/* Sidebar Header */}
+      <div className="p-4 border-b flex items-center justify-between">
+        <div className="flex items-center">
+          <div className="w-8 h-8 bg-secondary rounded-md flex items-center justify-center text-white">
+            <Network className="w-4 h-4" />
+          </div>
+          {!collapsed && <h1 className="ml-3 font-semibold text-lg">Cognos</h1>}
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-gray-500 hover:text-primary"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+      </div>
+      
+      {/* Search Box */}
+      {!collapsed && (
+        <div className="px-4 py-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search..."
+              className="pl-9 text-sm bg-gray-100 border-transparent"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Navigation Links */}
+      <nav className="flex-1 overflow-y-auto">
+        <div className="px-4 py-2">
+          {!collapsed && (
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              NAVIGATION
+            </h2>
+          )}
+          <div className="mt-3 space-y-1">
+            {navItems.map((item) => (
+              <Link key={item.path} href={item.path}>
+                <a
+                  className={`flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    location === item.path
+                      ? 'bg-gray-100 text-primary'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-primary'
+                  } ${collapsed ? 'justify-center' : ''}`}
+                >
+                  {item.icon}
+                  {!collapsed && <span className="ml-2">{item.label}</span>}
+                </a>
+              </Link>
+            ))}
+          </div>
+        </div>
+        
+        {/* Tags Section */}
+        {!collapsed && tags && tags.length > 0 && (
+          <div className="px-4 py-2 mt-6">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              TAGS
+            </h2>
+            <div className="mt-3 space-y-1">
+              {tags.map((tag: any) => (
+                <Link key={tag.id} href={`/tags/${tag.id}`}>
+                  <a className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary">
+                    <div className="flex items-center">
+                      <span className={`w-2 h-2 ${getTagColor(tag.name)} rounded-full mr-2`}></span>
+                      <span>{tag.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {tag.count || 0}
+                    </span>
+                  </a>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </nav>
+      
+      {/* User Profile */}
+      <div className="px-4 py-4 border-t">
+        <div className="flex items-center">
+          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-gray-500" />
+          </div>
+          {!collapsed && (
+            <div className="ml-3">
+              <p className="text-sm font-medium">User</p>
+              <p className="text-xs text-gray-500">user@example.com</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
