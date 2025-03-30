@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import TiptapEditor from '@/components/ui/tiptap-editor';
-import { X } from 'lucide-react';
+import { X, Tag, Loader2 } from 'lucide-react';
 
 // Form validation schema
 const formSchema = z.object({
@@ -68,7 +68,7 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
   
   // Fetch note data if editing existing note
   const { data: existingNote, isLoading: isLoadingNote } = useQuery<Note>({
-    queryKey: ['/api/notes', noteId],
+    queryKey: [`/api/notes/${noteId}`],
     enabled: isOpen && !!noteId,
   });
   
@@ -149,6 +149,81 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
     form.setValue('tags', updatedTags);
   };
   
+  // Auto-tagging functionality
+  const [isAutoTagging, setIsAutoTagging] = useState(false);
+  
+  const handleAutoTagging = async () => {
+    try {
+      setIsAutoTagging(true);
+      const content = form.getValues('content');
+      
+      if (!content.trim()) {
+        toast({
+          title: "Error",
+          description: "Please add some content to your note first.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const response = await apiRequest('POST', '/api/auto-tag', { content });
+      
+      if (response.suggestedTags && Array.isArray(response.suggestedTags)) {
+        const newTags = [...response.suggestedTags];
+        const tagsToApply: number[] = [];
+        
+        // Process each suggested tag
+        for (const tagName of newTags) {
+          // Check if tag already exists
+          const existingTag = tags?.find(t => 
+            t.name.toLowerCase() === tagName.toLowerCase()
+          );
+          
+          if (existingTag) {
+            // Add to the current selection if not already selected
+            if (!selectedTags.includes(existingTag.id)) {
+              tagsToApply.push(existingTag.id);
+            }
+          } else if (response.newTags) {
+            // Find the newly created tag from the response
+            const newCreatedTag = response.newTags.find((t: any) => 
+              t.name.toLowerCase() === tagName.toLowerCase()
+            );
+            
+            if (newCreatedTag && !selectedTags.includes(newCreatedTag.id)) {
+              tagsToApply.push(newCreatedTag.id);
+            }
+          }
+        }
+        
+        // Add tags to the note
+        if (tagsToApply.length > 0) {
+          const newSelectedTags = [...selectedTags, ...tagsToApply];
+          setSelectedTags(newSelectedTags);
+          form.setValue('tags', newSelectedTags);
+          
+          toast({
+            title: 'Tags added',
+            description: `Added ${tagsToApply.length} tag${tagsToApply.length === 1 ? '' : 's'} to your note.`,
+          });
+        } else {
+          toast({
+            title: 'No new tags',
+            description: 'No new tags were found for your content.'
+          });
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: `Failed to auto-tag content: ${error.message}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAutoTagging(false);
+    }
+  };
+  
   // Get tag name by id
   const getTagById = (tagId: number) => {
     return tags?.find((tag: any) => tag.id === tagId);
@@ -181,7 +256,20 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
             />
             
             <div>
-              <FormLabel>Tags</FormLabel>
+              <div className="flex justify-between items-center mb-1">
+                <FormLabel>Tags</FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs flex items-center gap-1"
+                  onClick={handleAutoTagging}
+                  disabled={isAutoTagging || !form.getValues('content')}
+                >
+                  {isAutoTagging ? <Loader2 className="h-3 w-3 animate-spin" /> : <Tag className="h-3 w-3" />}
+                  {isAutoTagging ? 'Auto-tagging...' : 'Auto-tag'}
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2 mb-2">
                 {selectedTags.map(tagId => {
                   const tag = getTagById(tagId);

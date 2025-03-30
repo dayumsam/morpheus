@@ -81,7 +81,7 @@ export default function NotesPage() {
         description: "Your note has been deleted successfully",
       });
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
         description: `Failed to delete note: ${error.message}`,
@@ -93,8 +93,18 @@ export default function NotesPage() {
   };
   
   // Filter notes based on search query and selected tag
-  const filteredNotes = Array.isArray(selectedTagId ? tagNotes : notes) 
-    ? (selectedTagId ? tagNotes : notes).filter((note: any) => {
+  type Note = {
+    id: number;
+    title: string;
+    content: string;
+    tags?: { id: number; name: string; color: string; }[];
+    createdAt: string | Date;
+    updatedAt: string | Date;
+  };
+  
+  const notesToFilter: Note[] = selectedTagId ? ((tagNotes || []) as Note[]) : ((notes || []) as Note[]);
+  const filteredNotes = Array.isArray(notesToFilter) 
+    ? notesToFilter.filter((note: Note) => {
         if (!note || !searchQuery) return true;
         const lowerCaseQuery = searchQuery.toLowerCase();
         return (
@@ -202,7 +212,7 @@ export default function NotesPage() {
       {/* Notes grid */}
       {!isLoading && !error && filteredNotes && filteredNotes.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredNotes.map((note: any) => (
+          {filteredNotes.map((note: Note) => (
             <NoteCard
               key={note.id}
               note={note}
