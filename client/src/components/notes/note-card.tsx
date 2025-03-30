@@ -1,6 +1,12 @@
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash, Calendar, Tag } from "lucide-react";
+import { Eye, Trash, Calendar, Tag } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { formatDistance } from "date-fns";
 
@@ -21,36 +27,72 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
   // Parse dates
   const createdAt = new Date(note.createdAt);
   const updatedAt = new Date(note.updatedAt);
-  
-  // Truncate content for preview
-  const truncatedContent = note.content
-    .replace(/<[^>]*>?/gm, '') // Strip HTML tags
-    .slice(0, 150) + (note.content.length > 150 ? '...' : '');
-    
+
+  // Process content for preview
+  const getPreviewContent = () => {
+    // Create a temporary div to parse HTML content
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = note.content;
+
+    // Get text content (this preserves spaces but removes tags)
+    const textContent = tempDiv.textContent || tempDiv.innerText || "";
+
+    // Truncate the text content
+    const truncated =
+      textContent.slice(0, 150) + (textContent.length > 150 ? "..." : "");
+
+    return truncated;
+  };
+
+  // Create a proper HTML preview
+  const createHTMLPreview = () => {
+    // Limit the preview length to avoid large renders
+    let previewHTML = note.content.slice(0, 500);
+
+    // Create a safe preview that won't break the layout
+    return {
+      __html: previewHTML,
+    };
+  };
+
   return (
     <Card className="h-full flex flex-col hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg font-semibold">{note.title}</CardTitle>
           <div className="flex space-x-1">
-            <Link to={`/notes/${note.id}/edit`}>
+            <Link to={`/notes/${note.id}`}>
               <Button variant="ghost" size="icon">
-                <Edit className="h-4 w-4" />
+                <Eye className="h-4 w-4" />
               </Button>
             </Link>
             {onDelete && (
-              <Button variant="ghost" size="icon" onClick={() => onDelete(note.id)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDelete(note.id)}
+              >
                 <Trash className="h-4 w-4" />
               </Button>
             )}
           </div>
         </div>
       </CardHeader>
-      
       <CardContent className="flex-grow pb-2">
-        <p className="text-sm text-gray-600">{truncatedContent}</p>
+        {/* HTML Preview with proper rendering */}
+        <div
+          className="text-sm text-gray-600 prose prose-sm max-w-none overflow-hidden"
+          style={{
+            maxHeight: "200px",
+            display: "-webkit-box",
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          dangerouslySetInnerHTML={createHTMLPreview()}
+        />
       </CardContent>
-      
       <CardFooter className="flex flex-col items-start pt-2 border-t text-xs text-gray-500">
         <div className="flex items-center w-full justify-between">
           <div className="flex items-center">
@@ -65,12 +107,11 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             </span>
           </Link>
         </div>
-        
         {note.tags && note.tags.length > 0 && (
           <div className="flex gap-2 mt-2 flex-wrap">
-            {note.tags.map(tag => (
-              <div 
-                key={tag.id} 
+            {note.tags.map((tag) => (
+              <div
+                key={tag.id}
                 className="flex items-center text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"
               >
                 <Tag className="h-3 w-3 mr-1" style={{ color: tag.color }} />

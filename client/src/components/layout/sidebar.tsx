@@ -22,7 +22,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ className = '' }: SidebarProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -131,9 +131,20 @@ export default function Sidebar({ className = '' }: SidebarProps) {
               </Link>
             </div>
             <div className="mt-3 space-y-1">
-              {tags.map((tag: any) => (
-                <Link key={tag.id} to={`/notes?tagId=${tag.id}`}>
-                  <div className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary cursor-pointer">
+              {tags.map((tag: any) => {
+                const [_, setLocation] = useLocation();
+                const handleTagClick = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  // Force location update with tag ID
+                  setLocation(`/notes?tagId=${tag.id}&t=${Date.now()}`);
+                };
+                
+                return (
+                  <div 
+                    key={tag.id} 
+                    onClick={handleTagClick}
+                    className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary cursor-pointer"
+                  >
                     <div className="flex items-center">
                       <span className={`w-2 h-2 rounded-full mr-2`} style={{ backgroundColor: tag.color }}></span>
                       <span>{tag.name}</span>
@@ -142,8 +153,8 @@ export default function Sidebar({ className = '' }: SidebarProps) {
                       {tag.count || 0}
                     </span>
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
