@@ -29,54 +29,95 @@ export const mcpQuerySchema = z.object({
 });
 
 export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {query: string, tags?: string[], limit?: number}): Promise<{notes: (Note & { tags: Tag[]; relevanceScore: number })[], links: (Link & { tags: Tag[]; relevanceScore: number })[]}> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is required for semantic search");
+  }
+
+  const OpenAI = await import("openai");
+  const openai = new OpenAI.OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+
+  // Get query embedding
+  const queryEmbedding = await openai.embeddings.create({
+    model: "text-embedding-ada-002",
+    input: query
+  });
+  const queryVector = queryEmbedding.data[0].embedding;
+
   const results = {
     notes: [],
-    links: [],
-    relevanceScores: new Map()
+    links: []
   };
 
-  // Get all items
+  // Get all notes and links
   const allNotes = await storage.getNotes();
   const allLinks = await storage.getLinks();
 
-  // Helper to calculate relevance score
-  const calculateRelevance = (text: string) => {
-    const queryTerms = query.toLowerCase().split(' ');
-    const contentTerms = text.toLowerCase().split(' ');
-    let matches = 0;
-    for (const term of queryTerms) {
-      if (contentTerms.includes(term)) matches++;
-    }
-    return matches / queryTerms.length;
+  // Process notes with embeddings
+  const noteEmbeddings = await Promise.all(
+    allNotes.map(async (note) => {
+      const content = `${note.title}\n${note.content}`;
+      const embedding = await openai.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: content
+      });
+      return {
+        note,
+        embedding: embedding.data[0].embedding
+      };
+    })
+  );
+
+  //Process links with embeddings
+  const linkEmbeddings = await Promise.all(
+    allLinks.map(async (link) => {
+      const content = `${link.title}\n${link.description || ''}\n${link.url}`;
+      const embedding = await openai.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: content
+      });
+      return {
+        link,
+        embedding: embedding.data[0].embedding
+      };
+    })
+  );
+
+
+  //Helper function to calculate cosine similarity
+  const cosineSimilarity = (vec1: number[], vec2: number[]): number => {
+    const dotProduct = vec1.reduce((acc, val, i) => acc + val * vec2[i], 0);
+    const mag1 = Math.sqrt(vec1.reduce((acc, val) => acc + val * val, 0));
+    const mag2 = Math.sqrt(vec2.reduce((acc, val) => acc + val * val, 0));
+    return dotProduct / (mag1 * mag2);
   };
 
-  // Process notes
-  for (const note of allNotes) {
-    const noteTags = await storage.getNoteTagsByNoteId(note.id);
-    const relevance = calculateRelevance(note.title + ' ' + note.content);
 
-    if (relevance > 0 || tags.some(t => noteTags.map(nt => nt.name).includes(t))) {
+  // Calculate similarity scores and filter
+  noteEmbeddings.forEach(({ note, embedding }) => {
+    const similarity = cosineSimilarity(queryVector, embedding);
+    const noteTags = await storage.getNoteTagsByNoteId(note.id);
+    if (similarity > 0 || tags.some(t => noteTags.map(nt => nt.name).includes(t))) {
       results.notes.push({
         ...note,
         tags: noteTags,
-        relevanceScore: relevance
+        relevanceScore: similarity
       });
     }
-  }
+  });
 
-  // Process links
-  for (const link of allLinks) {
+  linkEmbeddings.forEach(({ link, embedding }) => {
+    const similarity = cosineSimilarity(queryVector, embedding);
     const linkTags = await storage.getLinkTagsByLinkId(link.id);
-    const relevance = calculateRelevance(link.title + ' ' + (link.description || ''));
-
-    if (relevance > 0 || tags.some(t => linkTags.map(lt => lt.name).includes(t))) {
+    if (similarity > 0 || tags.some(t => linkTags.map(lt => lt.name).includes(t))) {
       results.links.push({
         ...link,
         tags: linkTags,
-        relevanceScore: relevance
+        relevanceScore: similarity
       });
     }
-  }
+  });
 
   // Sort by relevance and limit results
   results.notes.sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -91,7 +132,7 @@ export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {que
 export class MCPService {
   async getTags(query: string) {
     const tags = await storage.getTags();
-    
+
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OpenAI API key is required for semantic tag matching");
     }
