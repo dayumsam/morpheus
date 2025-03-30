@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useLocation } from "wouter";
 
+interface Tag {
+  id: number;
+  name: string;
+  color: string;
+  count?: number;
+}
+
 export default function NotesPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,34 +56,42 @@ export default function NotesPage() {
     }
   }, [location]);
 
-  // Fetch all notes
+  // Fetch notes based on selected tag
   const {
     data: notes,
     isLoading,
     error,
-    refetch,
   } = useQuery({
-    queryKey: ["/api/notes"],
+    queryKey: ["/api/notes", location], // Include location in query key to refetch when URL changes
+    queryFn: async () => {
+      if (selectedTagId) {
+        return apiRequest("GET", `/api/tags/${selectedTagId}/notes`);
+      } else {
+        return apiRequest("GET", "/api/notes");
+      }
+    },
   });
 
-  // Fetch tags to pass to the notes
-  const { data: tags, isLoading: isTagsLoading } = useQuery({
+  // Fetch tags
+  const { data: tags } = useQuery<Tag[]>({
     queryKey: ["/api/tags"],
   });
 
-  // Fetch notes for a specific tag if selectedTagId is set
-  const { data: tagNotes, isLoading: isTagNotesLoading } = useQuery({
-    queryKey: [`/api/tags/${selectedTagId}/notes`],
-    enabled: !!selectedTagId,
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
-  });
-
-  // Get the selected tag name if a tag is selected
+  // Get selected tag info
   const selectedTag =
-    selectedTagId && tags && Array.isArray(tags)
-      ? tags.find((tag: any) => tag.id === selectedTagId)
+    selectedTagId && tags
+      ? tags.find((tag: Tag) => tag.id === selectedTagId)
       : null;
+
+  // Filter notes by search query
+  const filteredNotes = (notes || []).filter((note: any) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      note.title.toLowerCase().includes(query) ||
+      note.content.toLowerCase().includes(query)
+    );
+  });
 
   // Delete note
   const handleDeleteNote = async () => {
@@ -88,7 +103,6 @@ export default function NotesPage() {
         title: "Note deleted",
         description: "Your note has been deleted successfully",
       });
-      refetch();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -100,42 +114,15 @@ export default function NotesPage() {
     }
   };
 
-  // Filter notes based on search query and selected tag
-  type Note = {
-    id: number;
-    title: string;
-    content: string;
-    tags?: { id: number; name: string; color: string }[];
-    createdAt: string | Date;
-    updatedAt: string | Date;
+  // Clear tag filter
+  const clearTagFilter = () => {
+    setLocation("/notes");
   };
-
-  const notesToFilter: Note[] = selectedTagId
-    ? ((tagNotes || []) as Note[])
-    : ((notes || []) as Note[]);
-  const filteredNotes = Array.isArray(notesToFilter)
-    ? notesToFilter.filter((note: Note) => {
-        if (!note || !searchQuery) return true;
-        const lowerCaseQuery = searchQuery.toLowerCase();
-        return (
-          (note.title && note.title.toLowerCase().includes(lowerCaseQuery)) ||
-          (note.content &&
-            typeof note.content === "string" &&
-            note.content.toLowerCase().includes(lowerCaseQuery))
-        );
-      })
-    : [];
 
   // Edit note
   const handleEditNote = (id: number) => {
     setEditingNoteId(id);
     setShowNoteForm(true);
-  };
-
-  // Clear tag filter
-  const clearTagFilter = () => {
-    setLocation("/notes");
-    setSelectedTagId(null);
   };
 
   return (
@@ -162,6 +149,59 @@ export default function NotesPage() {
         </Button>
       </div>
 
+      {/* Tag filters */}
+      {tags && tags.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-medium text-gray-700">
+              Filter by tags:
+            </h3>
+            {selectedTagId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={clearTagFilter}
+              >
+                Clear filter
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {tags
+              .sort((a: Tag, b: Tag) => (b.count || 0) - (a.count || 0))
+              .map((tag: Tag) => (
+                <Button
+                  key={tag.id}
+                  variant={selectedTagId === tag.id ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs flex items-center gap-1"
+                  onClick={() => setLocation(`/notes?tagId=${tag.id}`)}
+                  style={{
+                    borderColor:
+                      selectedTagId === tag.id ? tag.color : undefined,
+                    backgroundColor:
+                      selectedTagId === tag.id ? tag.color : undefined,
+                    color: selectedTagId === tag.id ? "white" : tag.color,
+                  }}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full`}
+                    style={{
+                      backgroundColor:
+                        selectedTagId === tag.id ? "white" : tag.color,
+                    }}
+                  ></span>
+                  {tag.name}
+                  <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full ml-1">
+                    {tag.count || 0}
+                  </span>
+                </Button>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Selected tag filter */}
       {selectedTag && (
         <div className="mb-6 flex items-center">
@@ -185,7 +225,7 @@ export default function NotesPage() {
       )}
 
       {/* Loading state */}
-      {(isLoading || (selectedTagId && isTagNotesLoading)) && (
+      {isLoading && (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-secondary" />
         </div>
@@ -201,8 +241,7 @@ export default function NotesPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading && 
-        !(selectedTagId && isTagNotesLoading) &&
+      {!isLoading &&
         !error &&
         (!filteredNotes || filteredNotes.length === 0) && (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
@@ -229,9 +268,9 @@ export default function NotesPage() {
         )}
 
       {/* Notes grid */}
-      {!isLoading && !(selectedTagId && isTagNotesLoading) && !error && filteredNotes && filteredNotes.length > 0 && (
+      {!isLoading && !error && filteredNotes && filteredNotes.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredNotes.map((note: Note) => (
+          {filteredNotes.map((note: any) => (
             <NoteCard
               key={note.id}
               note={note}

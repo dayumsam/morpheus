@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useLocation } from 'wouter';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { X, Save, ChevronLeft, Hash, Plus, Loader2 } from 'lucide-react';
-import TiptapEditor from '@/components/ui/tiptap-editor';
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useLocation } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { X, Save, ChevronLeft, Hash, Plus, Loader2 } from "lucide-react";
+import TiptapEditor from "@/components/ui/tiptap-editor";
 
 // Form validation schema
 const formSchema = z.object({
-  title: z.string().min(1, { message: 'Title is required' }),
-  content: z.string().min(1, { message: 'Content is required' }),
+  title: z.string().min(1, { message: "Title is required" }),
+  content: z.string().min(1, { message: "Content is required" }),
   tags: z.array(z.number()).optional(),
 });
 
@@ -39,7 +39,7 @@ export default function NoteEditorPage() {
   const queryClient = useQueryClient();
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [showTagInput, setShowTagInput] = useState(false);
-  const [newTagName, setNewTagName] = useState('');
+  const [newTagName, setNewTagName] = useState("");
   const [isAutoTagging, setIsAutoTagging] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
 
@@ -47,21 +47,23 @@ export default function NoteEditorPage() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: '',
-      content: '',
+      title: "",
+      content: "",
       tags: [],
     },
   });
 
   // Fetch note data if editing
   const { data: existingNote, isLoading: isLoadingNote } = useQuery<Note>({
-    queryKey: ['/api/notes', noteId],
+    queryKey: [`/api/notes/${noteId}`],
     enabled: !!noteId,
   });
 
   // Fetch all tags
-  const { data: tags, isLoading: isLoadingTags } = useQuery<{ id: number; name: string; color: string }[]>({
-    queryKey: ['/api/tags'],
+  const { data: tags, isLoading: isLoadingTags } = useQuery<
+    { id: number; name: string; color: string }[]
+  >({
+    queryKey: ["/api/tags"],
   });
 
   // Set form values when editing existing note
@@ -70,51 +72,59 @@ export default function NoteEditorPage() {
       form.reset({
         title: existingNote.title,
         content: existingNote.content,
-        tags: existingNote.tags?.map(tag => tag.id) || [],
+        tags: existingNote.tags?.map((tag) => tag.id) || [],
       });
-      setSelectedTags(existingNote.tags?.map(tag => tag.id) || []);
+      setSelectedTags(existingNote.tags?.map((tag) => tag.id) || []);
+    } else if (!isNewNote) {
+      // If we're editing but couldn't find the note, redirect back to notes list
+      toast({
+        title: "Error",
+        description: "Note not found",
+        variant: "destructive",
+      });
+      setLocation("/notes");
     }
-  }, [existingNote, form]);
+  }, [existingNote, isNewNote, form, toast, setLocation]);
 
   // Create a new tag
   const createTagMutation = useMutation({
     mutationFn: async (name: string) => {
       // First check if tag already exists
-      const existingTag = tags?.find(t => 
-        t.name.toLowerCase() === name.toLowerCase()
+      const existingTag = tags?.find(
+        (t) => t.name.toLowerCase() === name.toLowerCase(),
       );
-      
+
       if (existingTag) {
         // If tag exists, return it instead of creating a new one
         return existingTag;
       }
-      
+
       // Otherwise create a new tag
       const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
-      return apiRequest('POST', '/api/tags', { name, color: randomColor });
+      return apiRequest("POST", "/api/tags", { name, color: randomColor });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
+
       // Only add if not already in selected tags
       if (!selectedTags.includes(data.id)) {
         const newSelectedTags = [...selectedTags, data.id];
         setSelectedTags(newSelectedTags);
-        form.setValue('tags', newSelectedTags);
+        form.setValue("tags", newSelectedTags);
       }
-      
-      setNewTagName('');
+
+      setNewTagName("");
       setShowTagInput(false);
       toast({
-        title: 'Tag added',
+        title: "Tag added",
         description: `Tag "${data.name}" has been added to the note`,
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to create tag: ${error.message}`,
-        variant: 'destructive',
+        variant: "destructive",
       });
     },
   });
@@ -123,20 +133,20 @@ export default function NoteEditorPage() {
   const saveMutation = useMutation({
     mutationFn: async (values: FormData) => {
       if (isNewNote) {
-        return apiRequest('POST', '/api/notes', values);
+        return apiRequest("POST", "/api/notes", values);
       } else {
-        return apiRequest('PUT', `/api/notes/${noteId}`, values);
+        return apiRequest("PUT", `/api/notes/${noteId}`, values);
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notes'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       toast({
-        title: isNewNote ? 'Note created' : 'Note updated',
-        description: isNewNote 
-          ? 'Your new note has been created' 
-          : 'Your note has been updated',
+        title: isNewNote ? "Note created" : "Note updated",
+        description: isNewNote
+          ? "Your new note has been created"
+          : "Your note has been updated",
       });
-      
+
       // Navigate to the note view page
       if (isNewNote) {
         setLocation(`/notes/${data.id}`);
@@ -146,20 +156,20 @@ export default function NoteEditorPage() {
     },
     onError: (error) => {
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to save note: ${error.message}`,
-        variant: 'destructive',
+        variant: "destructive",
       });
     },
   });
 
   // Auto-tag content using AI and apply tags to the note
   const autoTagContent = useCallback(async () => {
-    if (!form.getValues('content')) {
+    if (!form.getValues("content")) {
       toast({
-        title: 'Error',
-        description: 'Please add some content to auto-tag',
-        variant: 'destructive',
+        title: "Error",
+        description: "Please add some content to auto-tag",
+        variant: "destructive",
       });
       return;
     }
@@ -167,22 +177,22 @@ export default function NoteEditorPage() {
     setIsAutoTagging(true);
 
     try {
-      const response = await apiRequest('POST', '/api/auto-tag', {
-        content: form.getValues('content')
+      const response = await apiRequest("POST", "/api/auto-tag", {
+        content: form.getValues("content"),
       });
-      
+
       if (response.suggestedTags && Array.isArray(response.suggestedTags)) {
         const newTags = [...response.suggestedTags];
         const tagsToApply: number[] = [];
         const tagsToSuggest: string[] = [];
-        
+
         // Process each suggested tag
         for (const tagName of newTags) {
           // Check if tag already exists
-          const existingTag = tags?.find(t => 
-            t.name.toLowerCase() === tagName.toLowerCase()
+          const existingTag = tags?.find(
+            (t) => t.name.toLowerCase() === tagName.toLowerCase(),
           );
-          
+
           if (existingTag) {
             // Add to the current selection if not already selected
             if (!selectedTags.includes(existingTag.id)) {
@@ -193,27 +203,27 @@ export default function NoteEditorPage() {
             tagsToSuggest.push(tagName);
           }
         }
-        
+
         // Add existing tags to the note
         if (tagsToApply.length > 0) {
           const newSelectedTags = [...selectedTags, ...tagsToApply];
           setSelectedTags(newSelectedTags);
-          form.setValue('tags', newSelectedTags);
-          
+          form.setValue("tags", newSelectedTags);
+
           toast({
-            title: 'Tags added',
-            description: `Added ${tagsToApply.length} tag${tagsToApply.length === 1 ? '' : 's'} to your note.`,
+            title: "Tags added",
+            description: `Added ${tagsToApply.length} tag${tagsToApply.length === 1 ? "" : "s"} to your note.`,
           });
         }
-        
+
         // Set the remaining tags as suggestions
         setSuggestedTags(tagsToSuggest);
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to auto-tag content: ${error.message}`,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setIsAutoTagging(false);
@@ -223,15 +233,15 @@ export default function NoteEditorPage() {
   // Apply suggested tags
   const applyTagSuggestions = async () => {
     if (!suggestedTags.length) return;
-    
+
     const newSelectedTags = [...selectedTags];
-    
+
     for (const tagName of suggestedTags) {
       // Check if tag already exists
-      const existingTag = tags?.find(tag => 
-        tag.name.toLowerCase() === tagName.toLowerCase()
+      const existingTag = tags?.find(
+        (tag) => tag.name.toLowerCase() === tagName.toLowerCase(),
       );
-      
+
       if (existingTag) {
         if (!selectedTags.includes(existingTag.id)) {
           newSelectedTags.push(existingTag.id);
@@ -240,47 +250,47 @@ export default function NoteEditorPage() {
         // Create new tag
         try {
           const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
-          const response = await apiRequest('POST', '/api/tags', { 
-            name: tagName, 
-            color: randomColor
+          const response = await apiRequest("POST", "/api/tags", {
+            name: tagName,
+            color: randomColor,
           });
-          
+
           if (response && response.id) {
             if (!newSelectedTags.includes(response.id)) {
               newSelectedTags.push(response.id);
             }
           }
         } catch (error: any) {
-          console.error('Failed to create tag:', error);
+          console.error("Failed to create tag:", error);
           toast({
-            title: 'Warning',
+            title: "Warning",
             description: `Couldn't create tag "${tagName}". It may already exist.`,
-            variant: 'destructive',
+            variant: "destructive",
           });
         }
       }
     }
-    
+
     // Update selected tags
     setSelectedTags(newSelectedTags);
-    form.setValue('tags', newSelectedTags);
-    
+    form.setValue("tags", newSelectedTags);
+
     // Refresh tags and clear suggestions
-    queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+    queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
     setSuggestedTags([]);
-    
+
     toast({
-      title: 'Tags applied',
-      description: 'All suggested tags have been applied to the note',
+      title: "Tags applied",
+      description: "All suggested tags have been applied to the note",
     });
   };
 
   // Handle tag selection
   const toggleTag = (tagId: number) => {
     if (selectedTags.includes(tagId)) {
-      setSelectedTags(prev => prev.filter(id => id !== tagId));
+      setSelectedTags((prev) => prev.filter((id) => id !== tagId));
     } else {
-      setSelectedTags(prev => [...prev, tagId]);
+      setSelectedTags((prev) => [...prev, tagId]);
     }
   };
 
@@ -298,16 +308,16 @@ export default function NoteEditorPage() {
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    form.setValue('title', e.target.value);
+    form.setValue("title", e.target.value);
   };
 
   const handleContentChange = (content: string) => {
-    form.setValue('content', content);
+    form.setValue("content", content);
   };
 
   // Get tag by ID helper
   const getTagById = (tagId: number) => {
-    return tags?.find(tag => tag.id === tagId);
+    return tags?.find((tag) => tag.id === tagId);
   };
 
   return (
@@ -315,16 +325,17 @@ export default function NoteEditorPage() {
       {/* Header */}
       <header className="flex justify-between items-center border-b p-4">
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setLocation(isNewNote ? '/notes' : `/notes/${noteId}`)}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              setLocation(isNewNote ? "/notes" : `/notes/${noteId}`)
+            }
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <Input
-            value={existingNote?.title || form.getValues('title')}
-            onChange={handleTitleChange}
+            {...form.register("title")}
             placeholder="Untitled Note"
             className="text-xl font-medium border-none shadow-none focus-visible:ring-0 w-96"
           />
@@ -348,9 +359,9 @@ export default function NoteEditorPage() {
               </>
             )}
           </Button>
-          
-          <Button 
-            variant="default" 
+
+          <Button
+            variant="default"
             size="sm"
             onClick={saveNote}
             disabled={saveMutation.isPending}
@@ -372,12 +383,12 @@ export default function NoteEditorPage() {
 
       {/* Tags */}
       <div className="border-b px-4 py-2 flex flex-wrap items-center gap-2">
-        {selectedTags.map(tagId => {
+        {selectedTags.map((tagId) => {
           const tag = getTagById(tagId);
           return tag ? (
-            <Badge 
-              key={tagId} 
-              variant="outline" 
+            <Badge
+              key={tagId}
+              variant="outline"
               className="flex items-center gap-1 pl-3"
               style={{ borderColor: tag.color, color: tag.color }}
             >
@@ -403,9 +414,9 @@ export default function NoteEditorPage() {
               className="h-8 w-32 text-sm mr-1"
               autoFocus
             />
-            <Button 
-              type="submit" 
-              size="sm" 
+            <Button
+              type="submit"
+              size="sm"
               variant="ghost"
               className="h-8 p-1"
               disabled={createTagMutation.isPending}
@@ -416,13 +427,13 @@ export default function NoteEditorPage() {
                 <Plus className="h-4 w-4" />
               )}
             </Button>
-            <Button 
-              type="button" 
-              size="sm" 
+            <Button
+              type="button"
+              size="sm"
               variant="ghost"
               className="h-8 p-1"
               onClick={() => {
-                setNewTagName('');
+                setNewTagName("");
                 setShowTagInput(false);
               }}
             >
@@ -449,14 +460,14 @@ export default function NoteEditorPage() {
             onChange={(e) => {
               if (e.target.value) {
                 toggleTag(parseInt(e.target.value));
-                e.target.value = '';
+                e.target.value = "";
               }
             }}
           >
             <option value="">Select tag</option>
             {tags
-              .filter(tag => !selectedTags.includes(tag.id))
-              .map(tag => (
+              .filter((tag) => !selectedTags.includes(tag.id))
+              .map((tag) => (
                 <option key={tag.id} value={tag.id.toString()}>
                   {tag.name}
                 </option>
@@ -471,17 +482,17 @@ export default function NoteEditorPage() {
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-medium">Suggested Tags</h4>
             <div className="flex gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-7 text-xs"
                 onClick={() => setSuggestedTags([])}
               >
                 Dismiss
               </Button>
-              <Button 
-                variant="default" 
-                size="sm" 
+              <Button
+                variant="default"
+                size="sm"
                 className="h-7 text-xs"
                 onClick={applyTagSuggestions}
               >
@@ -491,14 +502,14 @@ export default function NoteEditorPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {suggestedTags.map((tag, index) => (
-              <Badge 
-                key={index} 
-                variant="outline" 
+              <Badge
+                key={index}
+                variant="outline"
                 className="cursor-pointer hover:bg-gray-100"
                 onClick={() => {
                   setNewTagName(tag);
                   createTagMutation.mutate(tag);
-                  setSuggestedTags(prev => prev.filter(t => t !== tag));
+                  setSuggestedTags((prev) => prev.filter((t) => t !== tag));
                 }}
               >
                 #{tag}
@@ -516,7 +527,7 @@ export default function NoteEditorPage() {
           </div>
         ) : (
           <TiptapEditor
-            content={existingNote?.content || form.getValues('content')}
+            content={existingNote?.content || form.getValues("content")}
             onChange={handleContentChange}
             placeholder="Start writing..."
             tags={tags}

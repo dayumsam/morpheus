@@ -31,14 +31,21 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     // Handle multi-part query keys (like ['/api/tags', tagId, 'notes'])
     let url = queryKey[0] as string;
-    
+
     // If this is a tag-notes query, construct the URL properly
-    if (queryKey.length > 2 && queryKey[0] === '/api/tags' && queryKey[2] === 'notes') {
+    if (
+      queryKey.length > 2 &&
+      queryKey[0] === "/api/tags" &&
+      queryKey[2] === "notes"
+    ) {
       url = `/api/tags/${queryKey[1]}/notes`;
     }
-    
-    console.log("Fetching from URL:", url);
-    
+
+    const startTime = performance.now();
+    console.log(
+      `[Query][${new Date().toISOString()}] START request for ${url}`,
+    );
+
     const res = await fetch(url, {
       credentials: "include",
     });
@@ -48,7 +55,15 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const data = await res.json();
+
+    const endTime = performance.now();
+    console.log(
+      `[Query][${new Date().toISOString()}] COMPLETED request for ${url} in ${Math.round(endTime - startTime)}ms`,
+      url === "/api/tags" ? `(Found ${data.length} tags)` : "",
+    );
+
+    return data;
   };
 
 export const queryClient = new QueryClient({
@@ -56,8 +71,9 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      refetchOnWindowFocus: true,
+      staleTime: 60 * 1000, // 1 minute
+      gcTime: 5 * 60 * 1000, // 5 minutes
       retry: false,
     },
     mutations: {

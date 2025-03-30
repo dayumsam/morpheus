@@ -13,6 +13,7 @@ import LinkPage from "@/pages/links/[id]";
 import GraphPage from "@/pages/graph";
 import DailyPromptsPage from "@/pages/daily-prompts";
 import TagsPage from "@/pages/tags/index";
+import { useEffect } from "react";
 
 function Router() {
   return (
@@ -32,9 +33,24 @@ function Router() {
   );
 }
 
+// Component to prefetch important data at app startup
+function AppInitializer() {
+  useEffect(() => {
+    console.log("[AppInitializer] Prefetching critical data at app startup");
+    // Prefetch tags immediately to avoid delayed loading
+    queryClient.prefetchQuery({
+      queryKey: ["/api/tags"],
+      staleTime: 60 * 1000, // 1 minute
+    });
+  }, []);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AppInitializer />
       <MainLayout>
         <Router />
       </MainLayout>

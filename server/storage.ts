@@ -24,6 +24,8 @@ import {
   type LinkTag,
   type InsertLinkTag,
 } from "@shared/schema";
+import { db } from "./db";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Notes
@@ -397,13 +399,22 @@ export class MemStorage implements IStorage {
 
   // Note Tags
   async getNoteTagsByNoteId(noteId: number): Promise<Tag[]> {
-    const noteTagIds = Array.from(this.noteTags.values())
-      .filter((nt) => nt.noteId === noteId)
-      .map((nt) => nt.tagId);
+    try {
+      const result = await db
+        .select()
+        .from(noteTags)
+        .innerJoin(tags, eq(noteTags.tagId, tags.id))
+        .where(eq(noteTags.noteId, noteId));
 
-    return Array.from(this.tags.values()).filter((tag) =>
-      noteTagIds.includes(tag.id),
-    );
+      return result.map((row) => ({
+        id: row.tags.id,
+        name: row.tags.name,
+        color: row.tags.color || "#000000",
+      }));
+    } catch (error) {
+      console.error(`Error getting tags for note with id ${noteId}:`, error);
+      return [];
+    }
   }
 
   async getNoteTagsByTagId(tagId: number): Promise<Note[]> {
@@ -748,47 +759,35 @@ export class MemStorage implements IStorage {
   }
 }
 
-import { db } from "./db";
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
-
-// Fix for the type errors, import the actual table variables
-import {
-  notes,
-  links,
-  tags,
-  noteTags,
-  linkTags,
-  connections,
-  dailyPrompts,
-  activities,
-} from "@shared/schema";
-
 export class DatabaseStorage implements IStorage {
   // Notes
   async getNotes(): Promise<Note[]> {
     try {
       const result = await db
-        .select()
+        .select({
+          notes: notes,
+          tags: tags,
+        })
         .from(notes)
         .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
-        .leftJoin(tags, eq(noteTags.tagId, tags.id));
+        .leftJoin(tags, eq(noteTags.tagId, tags.id))
+        .orderBy(desc(notes.updatedAt));
 
       // Group the results by note ID and collect the tags
       const noteMap = new Map<number, Note & { tags: Tag[] }>();
 
       result.forEach((row) => {
-        const note = row.notes;
-        if (!note) return;
+        if (!row.notes) return;
 
-        if (!noteMap.has(note.id)) {
-          noteMap.set(note.id, {
-            ...note,
+        if (!noteMap.has(row.notes.id)) {
+          noteMap.set(row.notes.id, {
+            ...row.notes,
             tags: [],
           });
         }
 
         if (row.tags) {
-          const noteWithTags = noteMap.get(note.id)!;
+          const noteWithTags = noteMap.get(row.notes.id)!;
           // Check if this tag is already in the tags array
           if (!noteWithTags.tags.some((t) => t.id === row.tags!.id)) {
             noteWithTags.tags.push(row.tags);
@@ -1028,35 +1027,28 @@ export class DatabaseStorage implements IStorage {
   async getLinks(): Promise<Link[]> {
     try {
       const result = await db
-        .select()
-        .from(links)
-        .leftJoin(linkTags, eq(links.id, linkTags.linkId))
-        .leftJoin(tags, eq(linkTags.tagId, tags.id));
+        .select({
+          id: links.id,
+          title: links.title,
+          url: links.url,
+          createdAt: links.createdAt,
+          updatedAt: links.updatedAt,
+          description: links.description,
+          summary: links.summary,
+          thumbnailUrl: links.thumbnailUrl,
+        })
+        .from(links);
 
-      // Group the results by link ID and collect the tags
-      const linkMap = new Map<number, Link & { tags: Tag[] }>();
-
-      result.forEach((row) => {
-        const link = row.links;
-        if (!link) return;
-
-        if (!linkMap.has(link.id)) {
-          linkMap.set(link.id, {
-            ...link,
-            tags: [],
-          });
-        }
-
-        if (row.tags) {
-          const linkWithTags = linkMap.get(link.id)!;
-          // Check if this tag is already in the tags array
-          if (!linkWithTags.tags.some((t) => t.id === row.tags!.id)) {
-            linkWithTags.tags.push(row.tags);
-          }
-        }
-      });
-
-      return Array.from(linkMap.values());
+      return result.map((link) => ({
+        id: link.id,
+        title: link.title,
+        url: link.url,
+        createdAt: link.createdAt,
+        updatedAt: link.updatedAt,
+        description: link.description ?? null,
+        summary: link.summary ?? null,
+        thumbnailUrl: link.thumbnailUrl ?? null,
+      }));
     } catch (error) {
       console.error("Error getting links:", error);
       return [];
@@ -1285,36 +1277,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tags
-  async getTags(): Promise<(Tag & { count: number })[]> {
+  async getTags(): Promise<Tag[]> {
     try {
-      // Get all tags
-      const allTags = await db.select().from(tags);
+      const result = await db
+        .select({
+          tag: tags,
+          count: sql<number>`count(${noteTags.id})::int`,
+        })
+        .from(tags)
+        .leftJoin(noteTags, eq(tags.id, noteTags.tagId))
+        .groupBy(tags.id);
 
-      // For each tag, count the notes and links that have it
-      const tagsWithCount: (Tag & { count: number })[] = [];
-
-      for (const tag of allTags) {
-        // Count notes with this tag
-        const noteTagsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(noteTags)
-          .where(eq(noteTags.tagId, tag.id));
-
-        // Count links with this tag
-        const linkTagsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(linkTags)
-          .where(eq(linkTags.tagId, tag.id));
-
-        // Add tag with count to result
-        tagsWithCount.push({
-          ...tag,
-          count:
-            Number(noteTagsCount[0].count) + Number(linkTagsCount[0].count),
-        });
-      }
-
-      return tagsWithCount;
+      return result.map((row) => ({
+        id: row.tag.id,
+        name: row.tag.name,
+        color: row.tag.color || "#000000",
+        count: row.count,
+      }));
     } catch (error) {
       console.error("Error getting tags:", error);
       return [];
@@ -1412,13 +1391,22 @@ export class DatabaseStorage implements IStorage {
 
   // Note Tags
   async getNoteTagsByNoteId(noteId: number): Promise<Tag[]> {
-    const noteTagIds = Array.from(this.noteTags.values())
-      .filter((nt) => nt.noteId === noteId)
-      .map((nt) => nt.tagId);
+    try {
+      const result = await db
+        .select()
+        .from(noteTags)
+        .innerJoin(tags, eq(noteTags.tagId, tags.id))
+        .where(eq(noteTags.noteId, noteId));
 
-    return Array.from(this.tags.values()).filter((tag) =>
-      noteTagIds.includes(tag.id),
-    );
+      return result.map((row) => ({
+        id: row.tags.id,
+        name: row.tags.name,
+        color: row.tags.color || "#000000",
+      }));
+    } catch (error) {
+      console.error(`Error getting tags for note with id ${noteId}:`, error);
+      return [];
+    }
   }
 
   async getNoteTagsByTagId(tagId: number): Promise<Note[]> {
@@ -1578,7 +1566,27 @@ export class DatabaseStorage implements IStorage {
   // Connections
   async getConnections(): Promise<Connection[]> {
     try {
-      return await db.select().from(connections);
+      const result = await db
+        .select({
+          id: connections.id,
+          createdAt: connections.createdAt,
+          sourceId: connections.sourceId,
+          sourceType: connections.sourceType,
+          targetId: connections.targetId,
+          targetType: connections.targetType,
+          strength: connections.strength,
+        })
+        .from(connections);
+
+      return result.map((conn) => ({
+        id: conn.id,
+        createdAt: conn.createdAt,
+        sourceId: conn.sourceId,
+        sourceType: conn.sourceType,
+        targetId: conn.targetId,
+        targetType: conn.targetType,
+        strength: conn.strength ?? 0,
+      }));
     } catch (error) {
       console.error("Error getting connections:", error);
       return [];
@@ -1743,10 +1751,23 @@ export class DatabaseStorage implements IStorage {
   // Daily Prompts
   async getDailyPrompts(): Promise<DailyPrompt[]> {
     try {
-      return await db
-        .select()
-        .from(dailyPrompts)
-        .orderBy(desc(dailyPrompts.createdAt));
+      const result = await db
+        .select({
+          id: dailyPrompts.id,
+          date: dailyPrompts.date,
+          prompt: dailyPrompts.prompt,
+          answer: dailyPrompts.answer,
+          isAnswered: dailyPrompts.isAnswered,
+        })
+        .from(dailyPrompts);
+
+      return result.map((prompt) => ({
+        id: prompt.id,
+        date: prompt.date,
+        prompt: prompt.prompt,
+        answer: prompt.answer ?? null,
+        isAnswered: prompt.isAnswered,
+      }));
     } catch (error) {
       console.error("Error getting daily prompts:", error);
       return [];
@@ -1822,12 +1843,9 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDailyPrompt(id: number): Promise<boolean> {
     try {
-      const result = await db
-        .delete(dailyPrompts)
-        .where(eq(dailyPrompts.id, id))
-        .returning();
+      await db.delete(dailyPrompts).where(eq(dailyPrompts.id, id));
 
-      return result.length > 0;
+      return true;
     } catch (error) {
       console.error(`Error deleting daily prompt with id ${id}:`, error);
       return false;
