@@ -772,6 +772,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MCP (Morpheus Context Protocol) routes
   // ================================
 
+  // Cursor context endpoint
+  app.post("/api/mcp/cursor-context", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+
+      // Use MCP search with optimized settings for Cursor
+      const results = await searchKnowledgeBase({
+        query,
+        tags: [], // Don't filter by tags for broader context
+        limit: 20 // Get more results for comprehensive context
+      });
+
+      // Format results for Cursor
+      const formattedResults = {
+        notes: results.notes.map(note => ({
+          content: `Title: ${note.title}\n\n${note.content}`,
+          relevance: note.relevanceScore,
+          tags: note.tags.map(t => t.name).join(', ')
+        })),
+        links: results.links.map(link => ({
+          content: `${link.title}\n${link.url}\n${link.description || ''}\n${link.summary || ''}`,
+          relevance: link.relevanceScore,
+          tags: link.tags.map(t => t.name).join(', ')
+        }))
+      };
+
+      return res.json(formattedResults);
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
   // Get all available tags
   app.get("/api/mcp/tags", async (req: Request, res: Response) => {
     try {
