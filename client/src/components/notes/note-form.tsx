@@ -51,13 +51,22 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   
   // Fetch tags for the dropdown
-  const { data: tags } = useQuery({
+  const { data: tags } = useQuery<{ id: number; name: string; color: string; }[]>({
     queryKey: ['/api/tags'],
     enabled: isOpen,
   });
   
+  interface Note {
+    id: number;
+    title: string;
+    content: string;
+    tags?: { id: number; name: string; color: string; }[];
+    createdAt?: string;
+    updatedAt?: string;
+  }
+  
   // Fetch note data if editing existing note
-  const { data: existingNote, isLoading: isLoadingNote } = useQuery({
+  const { data: existingNote, isLoading: isLoadingNote } = useQuery<Note>({
     queryKey: ['/api/notes', noteId],
     enabled: isOpen && !!noteId,
   });
@@ -170,24 +179,6 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
               )}
             />
             
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Content</FormLabel>
-                  <FormControl>
-                    <TiptapEditor 
-                      content={field.value} 
-                      onChange={field.onChange}
-                      placeholder="Start writing..."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
             <div>
               <FormLabel>Tags</FormLabel>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -236,6 +227,31 @@ export default function NoteForm({ noteId, isOpen, onClose }: NoteFormProps) {
                 )}
               </div>
             </div>
+            
+            <FormField
+              control={form.control}
+              name="content"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Content</FormLabel>
+                  <FormControl>
+                    <TiptapEditor 
+                      content={field.value} 
+                      onChange={field.onChange}
+                      placeholder="Start writing..."
+                      tags={tags}
+                      onTagSelect={(tagId) => {
+                        if (!selectedTags.includes(tagId)) {
+                          addTag(tagId.toString());
+                        }
+                      }}
+                      className="min-h-[400px]"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             <DialogFooter>
               <Button 

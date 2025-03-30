@@ -11,6 +11,7 @@ import {
 import { ZodError } from "zod";
 import { processLink } from "./lib/cheerio";
 import { generateSummary, generateDailyPrompt } from "./lib/openai";
+import { analyzeImage, createNoteFromImage, suggestTagsFromImage } from "./lib/image-recognition";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 
@@ -453,6 +454,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const graphData = await storage.getGraphData();
       return res.json(graphData);
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
+  // ================================
+  // Image Recognition routes
+  // ================================
+  
+  // Schema for image upload requests
+  const imageUploadSchema = z.object({
+    base64Image: z.string(),
+    title: z.string().optional(),
+    prompt: z.string().optional()
+  });
+  
+  // Analyze image and return analysis
+  app.post("/api/image/analyze", async (req: Request, res: Response) => {
+    try {
+      const { base64Image, prompt } = validateBody(imageUploadSchema, req.body);
+      
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ message: "OpenAI API key is required for image analysis" });
+      }
+      
+      const analysis = await analyzeImage(base64Image, prompt);
+      return res.json({ analysis });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+  
+  // Create a note from image
+  app.post("/api/image/create-note", async (req: Request, res: Response) => {
+    try {
+      const { base64Image, title } = validateBody(imageUploadSchema, req.body);
+      
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ message: "OpenAI API key is required for image analysis" });
+      }
+      
+      // Create note from image
+      const noteData = await createNoteFromImage(base64Image, title);
+      const note = await storage.createNote(noteData);
+      
+      // Generate suggested tags
+      const suggestedTagNames = await suggestTagsFromImage(base64Image);
+      
+      // Check if tags exist, create them if not, and add to note
+      const tags = [];
+      for (const tagName of suggestedTagNames) {
+        let tag = await storage.getTagByName(tagName);
+        
+        if (!tag) {
+          // Generate a random color for the tag
+          const colors = ['#805AD5', '#3182CE', '#38A169', '#DD6B20', '#E53E3E', '#6B46C1'];
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          
+          tag = await storage.createTag({ name: tagName, color: randomColor });
+        }
+        
+        await storage.addTagToNote(note.id, tag.id);
+        tags.push(tag);
+      }
+      
+      return res.status(201).json({ ...note, tags });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+  
+  // Suggest tags for an image
+  app.post("/api/image/suggest-tags", async (req: Request, res: Response) => {
+    try {
+      const { base64Image } = validateBody(imageUploadSchema, req.body);
+      
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ message: "OpenAI API key is required for tag suggestions" });
+      }
+      
+      const suggestedTags = await suggestTagsFromImage(base64Image);
+      return res.json({ tags: suggestedTags });
     } catch (err) {
       handleError(err, res);
     }

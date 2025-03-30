@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Plus, FilePlus, Link, X } from 'lucide-react';
+import { Plus, FilePlus, Link, X, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NoteForm from '@/components/notes/note-form';
 import LinkForm from '@/components/links/link-form';
+import ImageUploadForm from '@/components/notes/image-upload-form';
 
 export default function FloatingActionButton() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showLinkForm, setShowLinkForm] = useState(false);
+  const [showImageForm, setShowImageForm] = useState(false);
   
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -25,8 +27,20 @@ export default function FloatingActionButton() {
                 setIsExpanded(false);
                 setShowLinkForm(true);
               }}
+              title="Add Link"
             >
               <Link className="h-5 w-5" />
+            </Button>
+            
+            <Button
+              className="w-12 h-12 rounded-full bg-green-500 text-white shadow-lg hover:bg-opacity-90 transition-colors flex items-center justify-center"
+              onClick={() => {
+                setIsExpanded(false);
+                setShowImageForm(true);
+              }}
+              title="Create Note from Image"
+            >
+              <Image className="h-5 w-5" />
             </Button>
             
             <Button
@@ -35,6 +49,7 @@ export default function FloatingActionButton() {
                 setIsExpanded(false);
                 setShowNoteForm(true);
               }}
+              title="Create Note"
             >
               <FilePlus className="h-5 w-5" />
             </Button>
@@ -64,6 +79,12 @@ export default function FloatingActionButton() {
       <LinkForm 
         isOpen={showLinkForm} 
         onClose={() => setShowLinkForm(false)} 
+      />
+      
+      {/* Image upload form modal */}
+      <ImageUploadForm
+        isOpen={showImageForm}
+        onClose={() => setShowImageForm(false)}
       />
     </>
   );
