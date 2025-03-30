@@ -13,6 +13,7 @@ import LinkPage from "@/pages/links/[id]";
 import GraphPage from "@/pages/graph";
 import DailyPromptsPage from "@/pages/daily-prompts";
 import TagsPage from "@/pages/tags/index";
+import MCPSearchPage from "@/pages/mcp-search";
 import { useEffect } from "react";
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/tags" component={TagsPage} />
       <Route path="/graph" component={GraphPage} />
       <Route path="/daily-prompts" component={DailyPromptsPage} />
+      <Route path="/search" component={MCPSearchPage} />
       <Route component={NotFound} />
     </Switch>
   );

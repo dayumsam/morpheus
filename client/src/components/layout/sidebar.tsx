@@ -89,6 +89,11 @@ export default function Sidebar({ className = "" }: SidebarProps) {
       icon: <Network className="w-5 h-5" />,
     },
     {
+      path: "/search",
+      label: "Smart Search",
+      icon: <Search className="w-5 h-5" />,
+    },
+    {
       path: "/daily-prompts",
       label: "Daily Prompts",
       icon: <Lightbulb className="w-5 h-5" />,

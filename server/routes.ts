@@ -7,6 +7,9 @@ import {
   insertTagSchema,
   insertConnectionSchema,
   insertDailyPromptSchema,
+  type Note,
+  type Link,
+  type Tag,
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { processLink } from "./lib/cheerio";
@@ -22,6 +25,7 @@ import {
 } from "./lib/auto-tagging";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { searchKnowledgeBase, mcpQuerySchema } from "./services/mcp-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Error handling middleware
@@ -747,6 +751,233 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const suggestedTags = await suggestTagsFromImage(base64Image);
       return res.json({ tags: suggestedTags });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
+  // ================================
+  // Graph Data route
+  // ================================
+  app.get("/api/graph-data", async (req: Request, res: Response) => {
+    try {
+      const graphData = await storage.getGraphData();
+      return res.json(graphData);
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
+  // ================================
+  // MCP (Morpheus Context Protocol) routes
+  // ================================
+
+  // Get all available tags
+  app.get("/api/mcp/tags", async (req: Request, res: Response) => {
+    try {
+      const tags = await storage.getTags();
+      return res.json({ tags });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
+  // Enhanced query endpoint with semantic search and AI-powered tag relations
+  app.post("/api/mcp/query", async (req: Request, res: Response) => {
+    try {
+      // Validate input using our schema with defaults
+      const validatedQuery = mcpQuerySchema.parse(req.body);
+      
+      // Use our MCP service to search knowledge base with semantic search
+      const results = await searchKnowledgeBase(validatedQuery);
+      
+      // Return the enriched results
+      return res.json(results);
+      
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+  
+  // Legacy MCP implementation for backward compatibility
+  app.post("/api/mcp/legacy-query", async (req: Request, res: Response) => {
+    try {
+      const {
+        query,
+        tags: requestedTags,
+        includeRelatedTags = true,
+      } = req.body;
+
+      if (!query && !requestedTags) {
+        return res
+          .status(400)
+          .json({ message: "Either query or tags must be provided" });
+      }
+
+      // Get all available tags first
+      const allTags = await storage.getTags();
+
+      // Determine which tags to use
+      let tagsToUse: Tag[] = [];
+
+      // If specific tags were requested by ID or name
+      if (
+        requestedTags &&
+        Array.isArray(requestedTags) &&
+        requestedTags.length > 0
+      ) {
+        for (const tag of requestedTags) {
+          if (typeof tag === "number") {
+            const tagObj = await storage.getTag(tag);
+            if (tagObj) tagsToUse.push(tagObj);
+          } else if (typeof tag === "string") {
+            const tagObj = await storage.getTagByName(tag);
+            if (tagObj) tagsToUse.push(tagObj);
+          }
+        }
+      }
+
+      // If there's a query and we should include related tags, find potential tag matches in the query
+      if (query && typeof query === "string" && includeRelatedTags) {
+        const queryLower = query.toLowerCase();
+
+        // Find tags that might be related to the query
+        const relatedTags = allTags.filter((tag) => {
+          // Check if tag name appears in query
+          if (queryLower.includes(tag.name.toLowerCase())) return true;
+
+          // Check common synonyms or related terms for common categories
+          const tagNameLower = tag.name.toLowerCase();
+
+          // Travel related
+          if (
+            (tagNameLower === "travel" || tagNameLower === "vacation") &&
+            (queryLower.includes("trip") ||
+              queryLower.includes("holiday") ||
+              queryLower.includes("journey") ||
+              queryLower.includes("destination"))
+          ) {
+            return true;
+          }
+
+          // Design related
+          if (
+            (tagNameLower === "design" || tagNameLower === "ui") &&
+            (queryLower.includes("interface") ||
+              queryLower.includes("layout") ||
+              queryLower.includes("visual") ||
+              queryLower.includes("ux"))
+          ) {
+            return true;
+          }
+
+          // Color related
+          if (
+            tagNameLower === "color" &&
+            (queryLower.includes("palette") ||
+              queryLower.includes("theme") ||
+              queryLower.includes("scheme") ||
+              queryLower.includes("hue"))
+          ) {
+            return true;
+          }
+
+          return false;
+        });
+
+        // Add related tags to our list, avoiding duplicates
+        for (const relatedTag of relatedTags) {
+          if (!tagsToUse.some((t) => t.id === relatedTag.id)) {
+            tagsToUse.push(relatedTag);
+          }
+        }
+      }
+
+      const tagIds = tagsToUse.map((t) => t.id);
+
+      const results: { notes: Note[]; links: Link[] } = {
+        notes: [],
+        links: [],
+      };
+
+      // Get all notes and links
+      const allNotes = await storage.getNotes();
+      const allLinks = await storage.getLinks();
+
+      // If we have tags to filter by
+      if (tagIds.length > 0) {
+        // Filter notes by tags
+        for (const note of allNotes) {
+          const noteTags = await storage.getNoteTagsByNoteId(note.id);
+          const noteTagIds = noteTags.map((t) => t.id);
+
+          if (tagIds.some((id) => noteTagIds.includes(id))) {
+            results.notes.push(note);
+          }
+        }
+
+        // Filter links by tags
+        for (const link of allLinks) {
+          const linkTags = await storage.getLinkTagsByLinkId(link.id);
+          const linkTagIds = linkTags.map((t) => t.id);
+
+          if (tagIds.some((id) => linkTagIds.includes(id))) {
+            results.links.push(link);
+          }
+        }
+      } else {
+        // If no tags specified, include all items for text search
+        results.notes = allNotes;
+        results.links = allLinks;
+      }
+
+      // If there's a text query, filter results further by content
+      if (query && typeof query === "string") {
+        const lowerQuery = query.toLowerCase();
+
+        // Filter notes by query term
+        results.notes = results.notes.filter(
+          (note) =>
+            note.title.toLowerCase().includes(lowerQuery) ||
+            note.content.toLowerCase().includes(lowerQuery),
+        );
+
+        // Filter links by query term
+        results.links = results.links.filter(
+          (link) =>
+            link.title.toLowerCase().includes(lowerQuery) ||
+            (link.description &&
+              link.description.toLowerCase().includes(lowerQuery)) ||
+            (link.summary && link.summary.toLowerCase().includes(lowerQuery)),
+        );
+      }
+
+      // Get additional info for each item (tags and connections)
+      const enrichedResults = {
+        notes: await Promise.all(
+          results.notes.map(async (note) => {
+            const tags = await storage.getNoteTagsByNoteId(note.id);
+            return { ...note, tags };
+          }),
+        ),
+        links: await Promise.all(
+          results.links.map(async (link) => {
+            const tags = await storage.getLinkTagsByLinkId(link.id);
+            return { ...link, tags };
+          }),
+        ),
+      };
+
+      return res.json({
+        results: enrichedResults,
+        meta: {
+          total: enrichedResults.notes.length + enrichedResults.links.length,
+          notes: enrichedResults.notes.length,
+          links: enrichedResults.links.length,
+          usedTags: tagsToUse,
+          allTags: allTags,
+        },
+      });
     } catch (err) {
       handleError(err, res);
     }

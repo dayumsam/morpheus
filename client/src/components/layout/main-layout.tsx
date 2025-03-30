@@ -21,6 +21,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       '/links': 'Saved Links',
       '/graph': 'Knowledge Graph',
       '/daily-prompts': 'Daily Prompts',
+      '/search': 'Smart Search',
     };
     
     // Check for dynamic routes
