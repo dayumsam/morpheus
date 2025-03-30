@@ -91,14 +91,61 @@ export async function searchKnowledgeBase({ query, tags = [], limit = 10 }: {que
 export class MCPService {
   async getTags(query: string) {
     const tags = await storage.getTags();
-    return tags.map(tag => ({
-      name: tag.name,
-      relevance: query.toLowerCase().includes(tag.name.toLowerCase()) ? 1.0 : 0.5,
-      metadata: {
-        color: tag.color,
-        id: tag.id
-      }
+    
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is required for semantic tag matching");
+    }
+
+    // Create embeddings for the query and tags
+    const { Configuration, OpenAIApi } = await import("openai");
+    const openai = new OpenAIApi(new Configuration({
+      apiKey: process.env.OPENAI_API_KEY
     }));
+
+    // Get query embedding
+    const queryEmbedding = await openai.createEmbedding({
+      model: "text-embedding-ada-002",
+      input: query
+    });
+
+    // Get embeddings for all tags
+    const tagEmbeddings = await Promise.all(
+      tags.map(async (tag) => {
+        const embedding = await openai.createEmbedding({
+          model: "text-embedding-ada-002",
+          input: tag.name
+        });
+        return {
+          tag,
+          embedding: embedding.data.data[0].embedding
+        };
+      })
+    );
+
+    // Calculate cosine similarity between query and each tag
+    const queryVector = queryEmbedding.data.data[0].embedding;
+    const tagScores = tagEmbeddings.map(({ tag, embedding }) => {
+      const similarity = cosineSimilarity(queryVector, embedding);
+      return {
+        name: tag.name,
+        relevance: similarity,
+        metadata: {
+          color: tag.color,
+          id: tag.id
+        }
+      };
+    });
+
+    // Sort by relevance and return
+    return tagScores.sort((a, b) => b.relevance - a.relevance);
+  }
+
+  // Helper function to calculate cosine similarity
+  private cosineSimilarity(vec1: number[], vec2: number[]): number {
+    const dotProduct = vec1.reduce((acc, val, i) => acc + val * vec2[i], 0);
+    const mag1 = Math.sqrt(vec1.reduce((acc, val) => acc + val * val, 0));
+    const mag2 = Math.sqrt(vec2.reduce((acc, val) => acc + val * val, 0));
+    return dotProduct / (mag1 * mag2);
   }
 
   async getContext(query: string) {
