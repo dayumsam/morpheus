@@ -60,9 +60,9 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             </span>
           </div>
           <Link href={`/notes/${note.id}`}>
-            <a className="text-accent hover:text-secondary hover:underline">
+            <button className="text-accent hover:text-secondary hover:underline">
               View
-            </a>
+            </button>
           </Link>
         </div>
         

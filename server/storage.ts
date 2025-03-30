@@ -1303,6 +1303,12 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTag(id: number): Promise<boolean> {
     try {
+      // First check if tag exists
+      const existingTag = await this.getTag(id);
+      if (!existingTag) {
+        return false;
+      }
+      
       // Delete note-tag relationships
       await db
         .delete(noteTags)

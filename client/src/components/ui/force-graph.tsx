@@ -128,8 +128,17 @@ export default function ForceGraph({ data, onNodeClick, height = 500 }: ForceGra
             graphData={data}
             width={width}
             height={height}
-            nodeLabel={(node: any) => node.title}
+            nodeLabel={(node: any) => {
+              if (node.type === 'tag') {
+                return `#${node.label}`;
+              }
+              return node.label || node.title;
+            }}
             nodeColor={(node: any) => {
+              if (node.type === 'tag') {
+                return node.data?.color || '#805AD5';
+              }
+              
               // If the node has tags, use the first tag's color, otherwise use the node type color
               if (node.tags && node.tags.length > 0) {
                 const firstTagName = node.tags[0].name;
@@ -137,7 +146,42 @@ export default function ForceGraph({ data, onNodeClick, height = 500 }: ForceGra
               }
               return NODE_COLORS[node.type];
             }}
-            nodeRelSize={6}
+            nodeCanvasObject={(node: any, ctx, globalScale) => {
+              const label = node.label || node.title || '';
+              const fontSize = 14 / globalScale;
+              ctx.font = `${fontSize}px Sans-Serif`;
+              const textWidth = ctx.measureText(label).width;
+              const bgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
+              
+              // Draw node circle
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI);
+              ctx.fillStyle = node.color;
+              ctx.fill();
+              
+              if (globalScale >= 0.6) { // Only show labels when zoomed in enough
+                // Draw text background
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillRect(
+                  node.x - bgDimensions[0] / 2,
+                  node.y + 5, // Position below the node
+                  bgDimensions[0],
+                  bgDimensions[1]
+                );
+                
+                // Draw text
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#333';
+                ctx.fillText(label, node.x, node.y + 5 + fontSize / 2);
+              }
+            }}
+            nodePointerAreaPaint={(node: any, color, ctx) => {
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, 7, 0, 2 * Math.PI);
+              ctx.fill();
+            }}
             linkWidth={(link: any) => Math.sqrt(link.strength || 1)}
             linkDirectionalParticles={2}
             linkDirectionalParticleWidth={(link: any) => Math.sqrt((link.strength || 1) * 0.5)}
