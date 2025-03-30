@@ -35,28 +35,26 @@ export default function Sidebar({ className = "" }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
 
+  // Define loading state manually to avoid circular reference
+  const [isLoadingTags, setIsLoadingTags] = useState(true);
+  
   // Ensure we fetch tags immediately when the sidebar mounts
   useEffect(() => {
     console.log("[Sidebar] Initializing and triggering immediate tags fetch");
     const tagsQueryKey = ["/api/tags"];
 
-    // Check if tags are in the cache
-    const cachedData = queryClient.getQueryData(tagsQueryKey);
-
-    // If not in cache or stale, force an immediate refetch
-    if (!cachedData) {
-      console.log("[Sidebar] No cached tags found, forcing immediate fetch");
-      queryClient.fetchQuery({
-        queryKey: tagsQueryKey,
-        staleTime: 60 * 1000, // 1 minute
-      });
-    } else {
-      console.log("[Sidebar] Using cached tags data");
-    }
+    // Always force an immediate fetch to ensure tags are loaded
+    setIsLoadingTags(true);
+    queryClient.fetchQuery({
+      queryKey: tagsQueryKey,
+      staleTime: 60 * 1000, // 1 minute
+    })
+    .then(() => setIsLoadingTags(false))
+    .catch(() => setIsLoadingTags(false));
   }, [queryClient]);
 
   // Fetch tags for sidebar
-  const { data: tags, isLoading: isLoadingTags } = useQuery<Tag[]>({
+  const { data: tags } = useQuery<Tag[]>({
     queryKey: ["/api/tags"],
     staleTime: 60 * 1000, // 1 minute
     initialData: [] as Tag[],

@@ -59,32 +59,36 @@ export default function MCPSearch() {
     queryKey: ["/api/tags"],
   });
 
-  // Search query
+  // Search query - we won't use it directly, instead we'll make manual POST requests
   const {
     data: searchResults,
     isLoading: isSearching,
     refetch: performSearch,
   } = useQuery<SearchResult>({
     queryKey: [`/api/mcp/query`, query, selectedTags],
-    enabled: searchSubmitted,
+    enabled: false, // Disable auto-fetching since we'll handle it manually
     staleTime: 0,
   });
 
+  // State to store search results
+  const [manualSearchResults, setManualSearchResults] = useState<SearchResult | null>(null);
+  
   // Handle search submission
   const handleSearch = async () => {
     if (!query.trim() && selectedTags.length === 0) return;
     
     setSearchSubmitted(true);
+    setManualSearchResults(null);
     
     try {
-      const results = await apiRequest("POST", "/api/mcp/query", {
-        query: query,
+      const results = await apiRequest<SearchResult>("POST", "/api/mcp/query", {
+        query: query.trim(),
         tags: selectedTags.map(tag => tag.name),
         limit: 10
       });
       
       // Update results directly
-      return results;
+      setManualSearchResults(results);
     } catch (error) {
       console.error("Search error:", error);
     }
@@ -219,17 +223,17 @@ export default function MCPSearch() {
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : searchSubmitted && searchResults ? (
+      ) : searchSubmitted && manualSearchResults ? (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold">
-              Search Results ({searchResults.metadata?.totalNotes || 0} notes,{" "}
-              {searchResults.metadata?.totalLinks || 0} links)
+              Search Results ({manualSearchResults.metadata?.totalNotes || 0} notes,{" "}
+              {manualSearchResults.metadata?.totalLinks || 0} links)
             </h2>
-            {searchResults.suggestedTags && searchResults.suggestedTags.length > 0 && (
+            {manualSearchResults.suggestedTags && manualSearchResults.suggestedTags.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">Suggested tags:</span>
-                {searchResults.suggestedTags.map((tag) => (
+                {manualSearchResults.suggestedTags.map((tag) => (
                   <Badge
                     key={tag.id}
                     variant="outline"
@@ -247,21 +251,21 @@ export default function MCPSearch() {
           <Tabs defaultValue="all">
             <TabsList className="mb-4">
               <TabsTrigger value="all">All ({
-                (searchResults.notes?.length || 0) + 
-                (searchResults.links?.length || 0)
+                (manualSearchResults.notes?.length || 0) + 
+                (manualSearchResults.links?.length || 0)
               })</TabsTrigger>
               <TabsTrigger value="notes">
-                Notes ({searchResults.notes?.length || 0})
+                Notes ({manualSearchResults.notes?.length || 0})
               </TabsTrigger>
               <TabsTrigger value="links">
-                Links ({searchResults.links?.length || 0})
+                Links ({manualSearchResults.links?.length || 0})
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="all">
               <div className="space-y-4">
-                {searchResults.notes && searchResults.notes.length > 0 ? (
-                  searchResults.notes.map((note) => (
+                {manualSearchResults.notes && manualSearchResults.notes.length > 0 ? (
+                  manualSearchResults.notes.map((note) => (
                     <Card key={`note-${note.id}`} className="overflow-hidden">
                       <CardHeader className="pb-3">
                         <div className="flex items-center mb-1">
@@ -306,8 +310,8 @@ export default function MCPSearch() {
                   ))
                 ) : null}
 
-                {searchResults.links && searchResults.links.length > 0 ? (
-                  searchResults.links.map((link) => (
+                {manualSearchResults.links && manualSearchResults.links.length > 0 ? (
+                  manualSearchResults.links.map((link) => (
                     <Card key={`link-${link.id}`} className="overflow-hidden">
                       <CardHeader className="pb-3">
                         <div className="flex items-center mb-1">
@@ -356,8 +360,8 @@ export default function MCPSearch() {
                   ))
                 ) : null}
                 
-                {(!searchResults.notes || searchResults.notes.length === 0) && 
-                 (!searchResults.links || searchResults.links.length === 0) && (
+                {(!manualSearchResults.notes || manualSearchResults.notes.length === 0) && 
+                 (!manualSearchResults.links || manualSearchResults.links.length === 0) && (
                   <div className="text-center py-12 bg-white rounded-lg shadow-sm">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
                       No results found
@@ -372,8 +376,8 @@ export default function MCPSearch() {
 
             <TabsContent value="notes">
               <div className="space-y-4">
-                {searchResults.notes && searchResults.notes.length > 0 ? (
-                  searchResults.notes.map((note) => (
+                {manualSearchResults.notes && manualSearchResults.notes.length > 0 ? (
+                  manualSearchResults.notes.map((note) => (
                     <Card key={`note-${note.id}`} className="overflow-hidden">
                       <CardHeader className="pb-3">
                         <div className="flex items-center mb-1">
@@ -431,8 +435,8 @@ export default function MCPSearch() {
 
             <TabsContent value="links">
               <div className="space-y-4">
-                {searchResults.links && searchResults.links.length > 0 ? (
-                  searchResults.links.map((link) => (
+                {manualSearchResults.links && manualSearchResults.links.length > 0 ? (
+                  manualSearchResults.links.map((link) => (
                     <Card key={`link-${link.id}`} className="overflow-hidden">
                       <CardHeader className="pb-3">
                         <div className="flex items-center mb-1">
