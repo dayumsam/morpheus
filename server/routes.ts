@@ -772,6 +772,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MCP (Morpheus Context Protocol) routes
   // ================================
 
+  // Initialize Platform MCP
+  const platformMCP = new PlatformMCP();
+
+  // Platform MCP endpoints
+  app.post("/api/mcp/platform/tags", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      const tags = await platformMCP.getTags(query);
+      return res.json({ tags });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
+  app.post("/api/mcp/platform/context", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      const context = await platformMCP.getContext(query);
+      return res.json(context);
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+
   // Cursor context endpoint
   app.post("/api/mcp/cursor-context", async (req: Request, res: Response) => {
     try {
