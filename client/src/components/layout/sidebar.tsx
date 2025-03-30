@@ -9,7 +9,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  User
+  User,
+  Tag
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ export default function Sidebar({ className = '' }: SidebarProps) {
     { path: '/', label: 'Dashboard', icon: <Home className="w-5 h-5" /> },
     { path: '/notes', label: 'All Notes', icon: <StickyNote className="w-5 h-5" /> },
     { path: '/links', label: 'Saved Links', icon: <LinkIcon className="w-5 h-5" /> },
+    { path: '/tags', label: 'Manage Tags', icon: <Tag className="w-5 h-5" /> },
     { path: '/graph', label: 'Knowledge Graph', icon: <Network className="w-5 h-5" /> },
     { path: '/daily-prompts', label: 'Daily Prompts', icon: <Lightbulb className="w-5 h-5" /> },
   ];
@@ -120,15 +122,20 @@ export default function Sidebar({ className = '' }: SidebarProps) {
         {/* Tags Section */}
         {!collapsed && tags && tags.length > 0 && (
           <div className="px-4 py-2 mt-6">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              TAGS
-            </h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                TAGS
+              </h2>
+              <Link href="/tags">
+                <a className="text-xs text-primary hover:underline">Manage</a>
+              </Link>
+            </div>
             <div className="mt-3 space-y-1">
               {tags.map((tag: any) => (
-                <Link key={tag.id} href={`/tags/${tag.id}`}>
+                <Link key={tag.id} href={`/notes?tagId=${tag.id}`}>
                   <a className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary">
                     <div className="flex items-center">
-                      <span className={`w-2 h-2 ${getTagColor(tag.name)} rounded-full mr-2`}></span>
+                      <span className={`w-2 h-2 rounded-full mr-2`} style={{ backgroundColor: tag.color }}></span>
                       <span>{tag.name}</span>
                     </div>
                     <span className="text-xs text-gray-400">

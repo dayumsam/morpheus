@@ -12,6 +12,7 @@ import LinksPage from "@/pages/links/index";
 import LinkPage from "@/pages/links/[id]";
 import GraphPage from "@/pages/graph";
 import DailyPromptsPage from "@/pages/daily-prompts";
+import TagsPage from "@/pages/tags/index";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/notes/:id" component={NotePage} />
       <Route path="/links" component={LinksPage} />
       <Route path="/links/:id" component={LinkPage} />
+      <Route path="/tags" component={TagsPage} />
       <Route path="/graph" component={GraphPage} />
       <Route path="/daily-prompts" component={DailyPromptsPage} />
       <Route component={NotFound} />

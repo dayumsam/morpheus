@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Search } from "lucide-react";
+import { Plus, Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import NoteCard from "@/components/notes/note-card";
 import NoteForm from "@/components/notes/note-form";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useLocation } from "wouter";
 
 export default function NotesPage() {
   const { toast } = useToast();
@@ -25,6 +27,19 @@ export default function NotesPage() {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [location, setLocation] = useLocation();
+  
+  // Extract tag ID from URL if present
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tagId = urlParams.get('tagId');
+    if (tagId) {
+      setSelectedTagId(parseInt(tagId));
+    } else {
+      setSelectedTagId(null);
+    }
+  }, [location]);
   
   // Fetch all notes
   const { data: notes, isLoading, error, refetch } = useQuery({
@@ -32,9 +47,20 @@ export default function NotesPage() {
   });
   
   // Fetch tags to pass to the notes
-  const { data: tags } = useQuery({
+  const { data: tags, isLoading: isTagsLoading } = useQuery({
     queryKey: ['/api/tags'],
   });
+  
+  // Fetch notes for a specific tag if selectedTagId is set
+  const { data: tagNotes, isLoading: isTagNotesLoading } = useQuery({
+    queryKey: ['/api/tags', selectedTagId, 'notes'],
+    enabled: !!selectedTagId,
+  });
+  
+  // Get the selected tag name if a tag is selected
+  const selectedTag = selectedTagId && tags 
+    ? tags.find((tag: any) => tag.id === selectedTagId) 
+    : null;
   
   // Delete note
   const handleDeleteNote = async () => {
@@ -58,8 +84,8 @@ export default function NotesPage() {
     }
   };
   
-  // Filter notes based on search query
-  const filteredNotes = notes?.filter((note: any) => {
+  // Filter notes based on search query and selected tag
+  const filteredNotes = (selectedTagId ? tagNotes : notes)?.filter((note: any) => {
     if (!searchQuery) return true;
     const lowerCaseQuery = searchQuery.toLowerCase();
     return (
@@ -72,6 +98,12 @@ export default function NotesPage() {
   const handleEditNote = (id: number) => {
     setEditingNoteId(id);
     setShowNoteForm(true);
+  };
+  
+  // Clear tag filter
+  const clearTagFilter = () => {
+    setLocation('/notes');
+    setSelectedTagId(null);
   };
   
   return (
@@ -95,6 +127,28 @@ export default function NotesPage() {
           New Note
         </Button>
       </div>
+      
+      {/* Selected tag filter */}
+      {selectedTag && (
+        <div className="mb-6 flex items-center">
+          <span className="text-sm text-gray-600 mr-2">Filtered by tag:</span>
+          <Badge 
+            variant="outline" 
+            className="flex items-center gap-1 pl-3"
+            style={{ borderColor: selectedTag.color, color: selectedTag.color }}
+          >
+            #{selectedTag.name}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 hover:bg-transparent"
+              onClick={clearTagFilter}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        </div>
+      )}
       
       {/* Loading state */}
       {isLoading && (

@@ -276,6 +276,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       handleError(err, res);
     }
   });
+  
+  // Get notes by tag
+  app.get("/api/tags/:id/notes", async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const tag = await storage.getTag(id);
+      
+      if (!tag) {
+        return res.status(404).json({ message: "Tag not found" });
+      }
+      
+      const notes = await storage.getNoteTagsByTagId(id);
+      return res.json(notes);
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
 
   app.post("/api/tags", async (req: Request, res: Response) => {
     try {

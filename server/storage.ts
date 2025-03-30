@@ -1204,9 +1204,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tags
-  async getTags(): Promise<Tag[]> {
+  async getTags(): Promise<(Tag & { count: number })[]> {
     try {
-      return await db.select().from(tags);
+      // Get all tags
+      const allTags = await db.select().from(tags);
+      
+      // For each tag, count the notes and links that have it
+      const tagsWithCount: (Tag & { count: number })[] = [];
+      
+      for (const tag of allTags) {
+        // Count notes with this tag
+        const noteTagsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(noteTags)
+          .where(eq(noteTags.tagId, tag.id));
+          
+        // Count links with this tag
+        const linkTagsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(linkTags)
+          .where(eq(linkTags.tagId, tag.id));
+          
+        // Add tag with count to result
+        tagsWithCount.push({
+          ...tag,
+          count: Number(noteTagsCount[0].count) + Number(linkTagsCount[0].count)
+        });
+      }
+      
+      return tagsWithCount;
     } catch (error) {
       console.error("Error getting tags:", error);
       return [];
