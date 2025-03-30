@@ -123,9 +123,9 @@ export class MCPService {
     );
 
     // Calculate cosine similarity between query and each tag
-    const queryVector = queryEmbedding.data.data[0].embedding;
+    const queryVector = queryEmbedding.data[0].embedding;
     const tagScores = tagEmbeddings.map(({ tag, embedding }) => {
-      const similarity = cosineSimilarity(queryVector, embedding);
+      const similarity = this.cosineSimilarity(queryVector, embedding);
       return {
         name: tag.name,
         relevance: similarity,
