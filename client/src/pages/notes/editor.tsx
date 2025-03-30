@@ -79,18 +79,35 @@ export default function NoteEditorPage() {
   // Create a new tag
   const createTagMutation = useMutation({
     mutationFn: async (name: string) => {
+      // First check if tag already exists
+      const existingTag = tags?.find(t => 
+        t.name.toLowerCase() === name.toLowerCase()
+      );
+      
+      if (existingTag) {
+        // If tag exists, return it instead of creating a new one
+        return existingTag;
+      }
+      
+      // Otherwise create a new tag
       const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
       return apiRequest('POST', '/api/tags', { name, color: randomColor });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
-      setSelectedTags(prev => [...prev, data.id]);
-      form.setValue('tags', [...selectedTags, data.id]);
+      
+      // Only add if not already in selected tags
+      if (!selectedTags.includes(data.id)) {
+        const newSelectedTags = [...selectedTags, data.id];
+        setSelectedTags(newSelectedTags);
+        form.setValue('tags', newSelectedTags);
+      }
+      
       setNewTagName('');
       setShowTagInput(false);
       toast({
-        title: 'Tag created',
-        description: `Tag "${data.name}" has been created`,
+        title: 'Tag added',
+        description: `Tag "${data.name}" has been added to the note`,
       });
     },
     onError: (error) => {
@@ -207,7 +224,7 @@ export default function NoteEditorPage() {
   const applyTagSuggestions = async () => {
     if (!suggestedTags.length) return;
     
-    const newTags = [];
+    const newSelectedTags = [...selectedTags];
     
     for (const tagName of suggestedTags) {
       // Check if tag already exists
@@ -217,28 +234,45 @@ export default function NoteEditorPage() {
       
       if (existingTag) {
         if (!selectedTags.includes(existingTag.id)) {
-          setSelectedTags(prev => [...prev, existingTag.id]);
+          newSelectedTags.push(existingTag.id);
         }
       } else {
         // Create new tag
         try {
+          const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
           const response = await apiRequest('POST', '/api/tags', { 
             name: tagName, 
-            color: `#${Math.floor(Math.random() * 16777215).toString(16)}` 
+            color: randomColor
           });
           
-          if (response.newTags && Array.isArray(response.newTags)) {
-            newTags.push(...response.newTags);
+          if (response && response.id) {
+            if (!newSelectedTags.includes(response.id)) {
+              newSelectedTags.push(response.id);
+            }
           }
         } catch (error: any) {
           console.error('Failed to create tag:', error);
+          toast({
+            title: 'Warning',
+            description: `Couldn't create tag "${tagName}". It may already exist.`,
+            variant: 'destructive',
+          });
         }
       }
     }
     
+    // Update selected tags
+    setSelectedTags(newSelectedTags);
+    form.setValue('tags', newSelectedTags);
+    
     // Refresh tags and clear suggestions
     queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
     setSuggestedTags([]);
+    
+    toast({
+      title: 'Tags applied',
+      description: 'All suggested tags have been applied to the note',
+    });
   };
 
   // Handle tag selection
@@ -289,7 +323,7 @@ export default function NoteEditorPage() {
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <Input
-            value={form.getValues('title')}
+            value={existingNote?.title || form.getValues('title')}
             onChange={handleTitleChange}
             placeholder="Untitled Note"
             className="text-xl font-medium border-none shadow-none focus-visible:ring-0 w-96"
@@ -482,7 +516,7 @@ export default function NoteEditorPage() {
           </div>
         ) : (
           <TiptapEditor
-            content={form.getValues('content')}
+            content={existingNote?.content || form.getValues('content')}
             onChange={handleContentChange}
             placeholder="Start writing..."
             tags={tags}
