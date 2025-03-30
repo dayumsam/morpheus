@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, FilePlus, Link, X, Image } from 'lucide-react';
+import { Plus, FilePlus, Link as LinkIcon, X, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Link, useLocation } from 'wouter';
 import NoteForm from '@/components/notes/note-form';
 import LinkForm from '@/components/links/link-form';
-import ImageUploadForm from '@/components/notes/image-upload-form';
+import ImageUploadForm from '@/components/ui/image-upload-form';
 
 export default function FloatingActionButton() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -29,7 +30,7 @@ export default function FloatingActionButton() {
               }}
               title="Add Link"
             >
-              <Link className="h-5 w-5" />
+              <LinkIcon className="h-5 w-5" />
             </Button>
             
             <Button
@@ -43,16 +44,17 @@ export default function FloatingActionButton() {
               <Image className="h-5 w-5" />
             </Button>
             
-            <Button
-              className="w-12 h-12 rounded-full bg-secondary text-white shadow-lg hover:bg-opacity-90 transition-colors flex items-center justify-center"
-              onClick={() => {
-                setIsExpanded(false);
-                setShowNoteForm(true);
-              }}
-              title="Create Note"
-            >
-              <FilePlus className="h-5 w-5" />
-            </Button>
+            <Link href="/notes/new">
+              <Button
+                className="w-12 h-12 rounded-full bg-secondary text-white shadow-lg hover:bg-opacity-90 transition-colors flex items-center justify-center"
+                onClick={() => {
+                  setIsExpanded(false);
+                }}
+                title="Create Note"
+              >
+                <FilePlus className="h-5 w-5" />
+              </Button>
+            </Link>
           </>
         )}
         

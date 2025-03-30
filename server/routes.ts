@@ -12,6 +12,7 @@ import { ZodError } from "zod";
 import { processLink } from "./lib/cheerio";
 import { generateSummary, generateDailyPrompt } from "./lib/openai";
 import { analyzeImage, createNoteFromImage, suggestTagsFromImage } from "./lib/image-recognition";
+import { generateTagsFromContent, generateTagsFromMarkdown } from "./lib/auto-tagging";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 
@@ -520,6 +521,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       return res.status(201).json({ ...note, tags });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
+  
+  // ================================
+  // Auto-tagging route
+  // ================================
+  
+  // Schema for auto-tagging request
+  const autoTagSchema = z.object({
+    content: z.string()
+  });
+  
+  // Generate tags for content
+  app.post("/api/auto-tag", async (req: Request, res: Response) => {
+    try {
+      const { content } = validateBody(autoTagSchema, req.body);
+      
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ message: "OpenAI API key is required for auto-tagging" });
+      }
+      
+      // Generate tags from content
+      const suggestedTags = await generateTagsFromContent(content);
+      
+      // Find existing tags
+      const existingTags = await storage.getTags();
+      const existingTagNames = existingTags.map(tag => tag.name.toLowerCase());
+      
+      // Create any new tags
+      const tagsToCreate = suggestedTags.filter(tag => !existingTagNames.includes(tag.toLowerCase()));
+      const newTags = [];
+      
+      for (const tagName of tagsToCreate) {
+        // Generate a random color for the tag
+        const colors = ['#805AD5', '#3182CE', '#38A169', '#DD6B20', '#E53E3E', '#6B46C1'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        const newTag = await storage.createTag({ name: tagName, color: randomColor });
+        newTags.push(newTag);
+      }
+      
+      return res.json({ 
+        suggestedTags,
+        newTags
+      });
     } catch (err) {
       handleError(err, res);
     }

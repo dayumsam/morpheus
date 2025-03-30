@@ -1,7 +1,7 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash, Calendar, Tag } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatDistance } from "date-fns";
 
 interface NoteCardProps {
@@ -33,11 +33,11 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg font-semibold">{note.title}</CardTitle>
           <div className="flex space-x-1">
-            {onEdit && (
-              <Button variant="ghost" size="icon" onClick={() => onEdit(note.id)}>
+            <Link href={`/notes/${note.id}/edit`}>
+              <Button variant="ghost" size="icon">
                 <Edit className="h-4 w-4" />
               </Button>
-            )}
+            </Link>
             {onDelete && (
               <Button variant="ghost" size="icon" onClick={() => onDelete(note.id)}>
                 <Trash className="h-4 w-4" />

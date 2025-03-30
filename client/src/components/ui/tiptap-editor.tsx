@@ -334,7 +334,6 @@ export default function TiptapEditor({
         paragraph: false,
         text: false,
         heading: false,
-        link: false,
       }),
       Placeholder.configure({
         placeholder,
@@ -367,6 +366,73 @@ export default function TiptapEditor({
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editor]);
+  
+  // Add support for pasting markdown content
+  useEffect(() => {
+    if (!editor) return;
+    
+    const handlePaste = (event: Event) => {
+      const clipboardEvent = event as ClipboardEvent;
+      const text = clipboardEvent.clipboardData?.getData('text/plain');
+      
+      if (!text) return;
+      
+      // Check if the content looks like markdown
+      const isMarkdown = 
+        text.includes('#') || 
+        text.includes('*') || 
+        text.includes('- ') || 
+        text.includes('1. ') || 
+        (text.includes('[') && text.includes('](')) || 
+        text.includes('```');
+      
+      if (isMarkdown) {
+        event.preventDefault();
+        
+        // Convert markdown to HTML using basic regex replacements
+        let html = text
+          // Headers
+          .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+          .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+          .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+          .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+          
+          // Bold and italic
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          
+          // Lists
+          .replace(/^- (.+)$/gm, '<li>$1</li>')
+          .replace(/^[0-9]+\. (.+)$/gm, '<li>$1</li>')
+          .replace(/(<li>.+<\/li>\n)+/g, (m) => `<ul>${m.replace(/\n/g, '')}</ul>`)
+          
+          // Links
+          .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
+          
+          // Code blocks
+          .replace(/```([\s\S]+?)```/g, '<pre><code>$1</code></pre>')
+          
+          // Inline code
+          .replace(/`(.+?)`/g, '<code>$1</code>')
+          
+          // Paragraphs
+          .replace(/^(?!<[uh][l1-5>])(.+)$/gm, '<p>$1</p>');
+        
+        // Insert the HTML content
+        editor.commands.insertContent(html);
+      }
+    };
+    
+    // Add the paste event listener to the editor DOM element
+    const editorElement = document.querySelector('.ProseMirror');
+    if (editorElement) {
+      editorElement.addEventListener('paste', handlePaste as EventListener);
+    
+      return () => {
+        editorElement.removeEventListener('paste', handlePaste as EventListener);
+      };
+    }
   }, [editor]);
 
   return (
