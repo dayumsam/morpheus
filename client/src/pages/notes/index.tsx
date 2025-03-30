@@ -66,7 +66,7 @@ export default function NotesPage() {
 
   // Fetch notes for a specific tag if selectedTagId is set
   const { data: tagNotes, isLoading: isTagNotesLoading } = useQuery({
-    queryKey: ["/api/tags", selectedTagId, "notes"],
+    queryKey: [`/api/tags/${selectedTagId}/notes`],
     enabled: !!selectedTagId,
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true, // Refetch when component mounts
@@ -185,7 +185,7 @@ export default function NotesPage() {
       )}
 
       {/* Loading state */}
-      {isLoading && (
+      {(isLoading || (selectedTagId && isTagNotesLoading)) && (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-secondary" />
         </div>
@@ -201,7 +201,8 @@ export default function NotesPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading &&
+      {!isLoading && 
+        !(selectedTagId && isTagNotesLoading) &&
         !error &&
         (!filteredNotes || filteredNotes.length === 0) && (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
@@ -228,7 +229,7 @@ export default function NotesPage() {
         )}
 
       {/* Notes grid */}
-      {!isLoading && !error && filteredNotes && filteredNotes.length > 0 && (
+      {!isLoading && !(selectedTagId && isTagNotesLoading) && !error && filteredNotes && filteredNotes.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredNotes.map((note: Note) => (
             <NoteCard
