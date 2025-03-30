@@ -97,13 +97,13 @@ export class MCPService {
     }
 
     // Create embeddings for the query and tags
-    const { Configuration, OpenAIApi } = await import("openai");
-    const openai = new OpenAIApi(new Configuration({
+    const OpenAI = await import("openai");
+    const openai = new OpenAI.OpenAI({
       apiKey: process.env.OPENAI_API_KEY
-    }));
+    });
 
     // Get query embedding
-    const queryEmbedding = await openai.createEmbedding({
+    const queryEmbedding = await openai.embeddings.create({
       model: "text-embedding-ada-002",
       input: query
     });
@@ -111,13 +111,13 @@ export class MCPService {
     // Get embeddings for all tags
     const tagEmbeddings = await Promise.all(
       tags.map(async (tag) => {
-        const embedding = await openai.createEmbedding({
+        const embedding = await openai.embeddings.create({
           model: "text-embedding-ada-002",
           input: tag.name
         });
         return {
           tag,
-          embedding: embedding.data.data[0].embedding
+          embedding: embedding.data[0].embedding
         };
       })
     );
