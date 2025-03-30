@@ -86,11 +86,12 @@ export default function NotesPage() {
   
   // Filter notes based on search query and selected tag
   const filteredNotes = (selectedTagId ? tagNotes : notes)?.filter((note: any) => {
-    if (!searchQuery) return true;
+    if (!note || !searchQuery) return true;
     const lowerCaseQuery = searchQuery.toLowerCase();
     return (
-      note.title.toLowerCase().includes(lowerCaseQuery) ||
-      note.content.toLowerCase().includes(lowerCaseQuery)
+      (note.title && note.title.toLowerCase().includes(lowerCaseQuery)) ||
+      (note.content && typeof note.content === 'string' && 
+       note.content.toLowerCase().includes(lowerCaseQuery))
     );
   });
   

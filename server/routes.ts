@@ -345,7 +345,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Tag not found" });
       }
       
-      return res.status(204).send();
+      // Return a JSON response instead of a 204 No Content
+      return res.status(200).json({ success: true });
     } catch (err) {
       handleError(err, res);
     }
