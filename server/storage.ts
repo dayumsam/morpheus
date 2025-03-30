@@ -1,10 +1,28 @@
-import { 
-  notes, links, tags, noteTags, linkTags, connections, 
-  dailyPrompts, activities, type Note, type InsertNote, 
-  type Link, type InsertLink, type Tag, type InsertTag, 
-  type Connection, type InsertConnection, type DailyPrompt, 
-  type InsertDailyPrompt, type Activity, type InsertActivity,
-  type NoteTag, type InsertNoteTag, type LinkTag, type InsertLinkTag
+import {
+  notes,
+  links,
+  tags,
+  noteTags,
+  linkTags,
+  connections,
+  dailyPrompts,
+  activities,
+  type Note,
+  type InsertNote,
+  type Link,
+  type InsertLink,
+  type Tag,
+  type InsertTag,
+  type Connection,
+  type InsertConnection,
+  type DailyPrompt,
+  type InsertDailyPrompt,
+  type Activity,
+  type InsertActivity,
+  type NoteTag,
+  type InsertNoteTag,
+  type LinkTag,
+  type InsertLinkTag,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -46,10 +64,19 @@ export interface IStorage {
   // Connections
   getConnections(): Promise<Connection[]>;
   getConnection(id: number): Promise<Connection | undefined>;
-  getConnectionsBySourceId(sourceId: number, sourceType: string): Promise<Connection[]>;
-  getConnectionsByTargetId(targetId: number, targetType: string): Promise<Connection[]>;
+  getConnectionsBySourceId(
+    sourceId: number,
+    sourceType: string,
+  ): Promise<Connection[]>;
+  getConnectionsByTargetId(
+    targetId: number,
+    targetType: string,
+  ): Promise<Connection[]>;
   createConnection(connection: InsertConnection): Promise<Connection>;
-  updateConnection(id: number, connection: Partial<InsertConnection>): Promise<Connection | undefined>;
+  updateConnection(
+    id: number,
+    connection: Partial<InsertConnection>,
+  ): Promise<Connection | undefined>;
   deleteConnection(id: number): Promise<boolean>;
 
   // Daily Prompts
@@ -57,7 +84,10 @@ export interface IStorage {
   getDailyPrompt(id: number): Promise<DailyPrompt | undefined>;
   getLatestDailyPrompt(): Promise<DailyPrompt | undefined>;
   createDailyPrompt(prompt: InsertDailyPrompt): Promise<DailyPrompt>;
-  updateDailyPrompt(id: number, prompt: Partial<DailyPrompt>): Promise<DailyPrompt | undefined>;
+  updateDailyPrompt(
+    id: number,
+    prompt: Partial<DailyPrompt>,
+  ): Promise<DailyPrompt | undefined>;
   deleteDailyPrompt(id: number): Promise<boolean>;
 
   // Activities
@@ -67,7 +97,7 @@ export interface IStorage {
   deleteActivity(id: number): Promise<boolean>;
 
   // Graph Data
-  getGraphData(): Promise<{ nodes: any[], links: any[] }>;
+  getGraphData(): Promise<{ nodes: any[]; links: any[] }>;
 }
 
 export class MemStorage implements IStorage {
@@ -79,7 +109,7 @@ export class MemStorage implements IStorage {
   private connections: Map<number, Connection>;
   private dailyPrompts: Map<number, DailyPrompt>;
   private activities: Map<number, Activity>;
-  
+
   private noteCurrentId: number;
   private linkCurrentId: number;
   private tagCurrentId: number;
@@ -98,7 +128,7 @@ export class MemStorage implements IStorage {
     this.connections = new Map();
     this.dailyPrompts = new Map();
     this.activities = new Map();
-    
+
     this.noteCurrentId = 1;
     this.linkCurrentId = 1;
     this.tagCurrentId = 1;
@@ -129,79 +159,83 @@ export class MemStorage implements IStorage {
   async createNote(note: InsertNote): Promise<Note> {
     const id = this.noteCurrentId++;
     const now = new Date();
-    const newNote: Note = { 
-      ...note, 
-      id, 
-      createdAt: now, 
-      updatedAt: now 
+    const newNote: Note = {
+      ...note,
+      id,
+      createdAt: now,
+      updatedAt: now,
     };
     this.notes.set(id, newNote);
-    
+
     // Create activity for note creation
     this.createActivity({
       action: "created_note",
       entityId: id,
       entityType: "note",
-      metadata: { title: note.title }
+      metadata: { title: note.title },
     });
-    
+
     return newNote;
   }
 
-  async updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined> {
+  async updateNote(
+    id: number,
+    note: Partial<InsertNote>,
+  ): Promise<Note | undefined> {
     const existingNote = this.notes.get(id);
     if (!existingNote) return undefined;
 
-    const updatedNote: Note = { 
-      ...existingNote, 
-      ...note, 
-      updatedAt: new Date() 
+    const updatedNote: Note = {
+      ...existingNote,
+      ...note,
+      updatedAt: new Date(),
     };
     this.notes.set(id, updatedNote);
-    
+
     // Create activity for note update
     this.createActivity({
       action: "updated_note",
       entityId: id,
       entityType: "note",
-      metadata: { title: updatedNote.title }
+      metadata: { title: updatedNote.title },
     });
-    
+
     return updatedNote;
   }
 
   async deleteNote(id: number): Promise<boolean> {
     const deleted = this.notes.delete(id);
-    
+
     if (deleted) {
       // Delete all note tags
-      const noteTagsToDelete = Array.from(this.noteTags.values())
-        .filter(nt => nt.noteId === id);
-      
+      const noteTagsToDelete = Array.from(this.noteTags.values()).filter(
+        (nt) => nt.noteId === id,
+      );
+
       for (const noteTag of noteTagsToDelete) {
         this.noteTags.delete(noteTag.id);
       }
-      
+
       // Delete all connections
-      const connectionsToDelete = Array.from(this.connections.values())
-        .filter(conn => 
-          (conn.sourceId === id && conn.sourceType === "note") || 
-          (conn.targetId === id && conn.targetType === "note")
-        );
-      
+      const connectionsToDelete = Array.from(this.connections.values()).filter(
+        (conn) =>
+          (conn.sourceId === id && conn.sourceType === "note") ||
+          (conn.targetId === id && conn.targetType === "note"),
+      );
+
       for (const connection of connectionsToDelete) {
         this.connections.delete(connection.id);
       }
-      
+
       // Create activity for note deletion
       this.createActivity({
         action: "deleted_note",
         entityId: id,
         entityType: "note",
-        metadata: {}
+        metadata: {},
       });
     }
-    
+
     return deleted;
   }
 
@@ -217,85 +251,89 @@ export class MemStorage implements IStorage {
   }
 
   async getLinkByUrl(url: string): Promise<Link | undefined> {
-    return Array.from(this.links.values()).find(link => link.url === url);
+    return Array.from(this.links.values()).find((link) => link.url === url);
   }
 
   async createLink(link: InsertLink): Promise<Link> {
     const id = this.linkCurrentId++;
     const now = new Date();
-    const newLink: Link = { 
-      ...link, 
-      id, 
-      createdAt: now, 
-      updatedAt: now 
+    const newLink: Link = {
+      ...link,
+      id,
+      createdAt: now,
+      updatedAt: now,
     };
     this.links.set(id, newLink);
-    
+
     // Create activity for link creation
     this.createActivity({
       action: "saved_link",
       entityId: id,
       entityType: "link",
-      metadata: { title: link.title, url: link.url }
+      metadata: { title: link.title, url: link.url },
     });
-    
+
     return newLink;
   }
 
-  async updateLink(id: number, link: Partial<InsertLink>): Promise<Link | undefined> {
+  async updateLink(
+    id: number,
+    link: Partial<InsertLink>,
+  ): Promise<Link | undefined> {
     const existingLink = this.links.get(id);
     if (!existingLink) return undefined;
 
-    const updatedLink: Link = { 
-      ...existingLink, 
-      ...link, 
-      updatedAt: new Date() 
+    const updatedLink: Link = {
+      ...existingLink,
+      ...link,
+      updatedAt: new Date(),
     };
     this.links.set(id, updatedLink);
-    
+
     // Create activity for link update
     this.createActivity({
       action: "updated_link",
       entityId: id,
       entityType: "link",
-      metadata: { title: updatedLink.title }
+      metadata: { title: updatedLink.title },
     });
-    
+
     return updatedLink;
   }
 
   async deleteLink(id: number): Promise<boolean> {
     const deleted = this.links.delete(id);
-    
+
     if (deleted) {
       // Delete all link tags
-      const linkTagsToDelete = Array.from(this.linkTags.values())
-        .filter(lt => lt.linkId === id);
-      
+      const linkTagsToDelete = Array.from(this.linkTags.values()).filter(
+        (lt) => lt.linkId === id,
+      );
+
       for (const linkTag of linkTagsToDelete) {
         this.linkTags.delete(linkTag.id);
       }
-      
+
       // Delete all connections
-      const connectionsToDelete = Array.from(this.connections.values())
-        .filter(conn => 
-          (conn.sourceId === id && conn.sourceType === "link") || 
-          (conn.targetId === id && conn.targetType === "link")
-        );
-      
+      const connectionsToDelete = Array.from(this.connections.values()).filter(
+        (conn) =>
+          (conn.sourceId === id && conn.sourceType === "link") ||
+          (conn.targetId === id && conn.targetType === "link"),
+      );
+
       for (const connection of connectionsToDelete) {
         this.connections.delete(connection.id);
       }
-      
+
       // Create activity for link deletion
       this.createActivity({
         action: "deleted_link",
         entityId: id,
         entityType: "link",
-        metadata: {}
+        metadata: {},
       });
     }
-    
+
     return deleted;
   }
 
@@ -309,7 +347,7 @@ export class MemStorage implements IStorage {
   }
 
   async getTagByName(name: string): Promise<Tag | undefined> {
-    return Array.from(this.tags.values()).find(tag => tag.name === name);
+    return Array.from(this.tags.values()).find((tag) => tag.name === name);
   }
 
   async createTag(tag: InsertTag): Promise<Tag> {
@@ -319,7 +357,10 @@ export class MemStorage implements IStorage {
     return newTag;
   }
 
-  async updateTag(id: number, tag: Partial<InsertTag>): Promise<Tag | undefined> {
+  async updateTag(
+    id: number,
+    tag: Partial<InsertTag>,
+  ): Promise<Tag | undefined> {
     const existingTag = this.tags.get(id);
     if (!existingTag) return undefined;
 
@@ -330,54 +371,88 @@ export class MemStorage implements IStorage {
 
   async deleteTag(id: number): Promise<boolean> {
     const deleted = this.tags.delete(id);
-    
+
     if (deleted) {
       // Delete all note tags
-      const noteTagsToDelete = Array.from(this.noteTags.values())
-        .filter(nt => nt.tagId === id);
-      
+      const noteTagsToDelete = Array.from(this.noteTags.values()).filter(
+        (nt) => nt.tagId === id,
+      );
+
       for (const noteTag of noteTagsToDelete) {
         this.noteTags.delete(noteTag.id);
       }
-      
+
       // Delete all link tags
-      const linkTagsToDelete = Array.from(this.linkTags.values())
-        .filter(lt => lt.tagId === id);
-      
+      const linkTagsToDelete = Array.from(this.linkTags.values()).filter(
+        (lt) => lt.tagId === id,
+      );
+
       for (const linkTag of linkTagsToDelete) {
         this.linkTags.delete(linkTag.id);
       }
     }
-    
+
     return deleted;
   }
 
   // Note Tags
   async getNoteTagsByNoteId(noteId: number): Promise<Tag[]> {
     const noteTagIds = Array.from(this.noteTags.values())
-      .filter(nt => nt.noteId === noteId)
-      .map(nt => nt.tagId);
-    
-    return Array.from(this.tags.values())
-      .filter(tag => noteTagIds.includes(tag.id));
+      .filter((nt) => nt.noteId === noteId)
+      .map((nt) => nt.tagId);
+
+    return Array.from(this.tags.values()).filter((tag) =>
+      noteTagIds.includes(tag.id),
+    );
   }
 
   async getNoteTagsByTagId(tagId: number): Promise<Note[]> {
-    const noteIds = Array.from(this.noteTags.values())
-      .filter(nt => nt.tagId === tagId)
-      .map(nt => nt.noteId);
-    
-    return Array.from(this.notes.values())
-      .filter(note => noteIds.includes(note.id));
+    try {
+      const result = await db
+        .select()
+        .from(notes)
+        .innerJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .where(eq(noteTags.tagId, tagId))
+        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .leftJoin(tags, eq(noteTags.tagId, tags.id));
+
+      // Group notes and their tags
+      const notesMap = new Map<number, Note & { tags: Tag[] }>();
+
+      result.forEach((row) => {
+        if (!row.notes) return;
+
+        if (!notesMap.has(row.notes.id)) {
+          notesMap.set(row.notes.id, {
+            ...row.notes,
+            tags: [],
+          });
+        }
+
+        if (row.tags) {
+          const noteWithTags = notesMap.get(row.notes.id)!;
+          // Check if this tag is already in the tags array
+          if (!noteWithTags.tags.some((t) => t.id === row.tags!.id)) {
+            noteWithTags.tags.push(row.tags);
+          }
+        }
+      });
+
+      return Array.from(notesMap.values());
+    } catch (error) {
+      console.error(`Error getting notes for tag with id ${tagId}:`, error);
+      return [];
+    }
   }
 
   async addTagToNote(noteId: number, tagId: number): Promise<NoteTag> {
     // Check if tag is already assigned to note
-    const existing = Array.from(this.noteTags.values())
-      .find(nt => nt.noteId === noteId && nt.tagId === tagId);
-    
+    const existing = Array.from(this.noteTags.values()).find(
+      (nt) => nt.noteId === noteId && nt.tagId === tagId,
+    );
+
     if (existing) return existing;
-    
+
     const id = this.noteTagCurrentId++;
     const noteTag: NoteTag = { id, noteId, tagId };
     this.noteTags.set(id, noteTag);
@@ -385,42 +460,46 @@ export class MemStorage implements IStorage {
   }
 
   async removeTagFromNote(noteId: number, tagId: number): Promise<boolean> {
-    const noteTagToDelete = Array.from(this.noteTags.values())
-      .find(nt => nt.noteId === noteId && nt.tagId === tagId);
-    
+    const noteTagToDelete = Array.from(this.noteTags.values()).find(
+      (nt) => nt.noteId === noteId && nt.tagId === tagId,
+    );
+
     if (noteTagToDelete) {
       return this.noteTags.delete(noteTagToDelete.id);
     }
-    
+
     return false;
   }
 
   // Link Tags
   async getLinkTagsByLinkId(linkId: number): Promise<Tag[]> {
     const linkTagIds = Array.from(this.linkTags.values())
-      .filter(lt => lt.linkId === linkId)
-      .map(lt => lt.tagId);
-    
-    return Array.from(this.tags.values())
-      .filter(tag => linkTagIds.includes(tag.id));
+      .filter((lt) => lt.linkId === linkId)
+      .map((lt) => lt.tagId);
+
+    return Array.from(this.tags.values()).filter((tag) =>
+      linkTagIds.includes(tag.id),
+    );
   }
 
   async getLinkTagsByTagId(tagId: number): Promise<Link[]> {
     const linkIds = Array.from(this.linkTags.values())
-      .filter(lt => lt.tagId === tagId)
-      .map(lt => lt.linkId);
-    
-    return Array.from(this.links.values())
-      .filter(link => linkIds.includes(link.id));
+      .filter((lt) => lt.tagId === tagId)
+      .map((lt) => lt.linkId);
+
+    return Array.from(this.links.values()).filter((link) =>
+      linkIds.includes(link.id),
+    );
   }
 
   async addTagToLink(linkId: number, tagId: number): Promise<LinkTag> {
     // Check if tag is already assigned to link
-    const existing = Array.from(this.linkTags.values())
-      .find(lt => lt.linkId === linkId && lt.tagId === tagId);
-    
+    const existing = Array.from(this.linkTags.values()).find(
+      (lt) => lt.linkId === linkId && lt.tagId === tagId,
+    );
+
     if (existing) return existing;
-    
+
     const id = this.linkTagCurrentId++;
     const linkTag: LinkTag = { id, linkId, tagId };
     this.linkTags.set(id, linkTag);
@@ -428,13 +507,14 @@ export class MemStorage implements IStorage {
   }
 
   async removeTagFromLink(linkId: number, tagId: number): Promise<boolean> {
-    const linkTagToDelete = Array.from(this.linkTags.values())
-      .find(lt => lt.linkId === linkId && lt.tagId === tagId);
-    
+    const linkTagToDelete = Array.from(this.linkTags.values()).find(
+      (lt) => lt.linkId === linkId && lt.tagId === tagId,
+    );
+
     if (linkTagToDelete) {
       return this.linkTags.delete(linkTagToDelete.id);
     }
-    
+
     return false;
   }
 
@@ -447,68 +527,79 @@ export class MemStorage implements IStorage {
     return this.connections.get(id);
   }
 
-  async getConnectionsBySourceId(sourceId: number, sourceType: string): Promise<Connection[]> {
-    return Array.from(this.connections.values())
-      .filter(conn => conn.sourceId === sourceId && conn.sourceType === sourceType);
+  async getConnectionsBySourceId(
+    sourceId: number,
+    sourceType: string,
+  ): Promise<Connection[]> {
+    return Array.from(this.connections.values()).filter(
+      (conn) => conn.sourceId === sourceId && conn.sourceType === sourceType,
+    );
   }
 
-  async getConnectionsByTargetId(targetId: number, targetType: string): Promise<Connection[]> {
-    return Array.from(this.connections.values())
-      .filter(conn => conn.targetId === targetId && conn.targetType === targetType);
+  async getConnectionsByTargetId(
+    targetId: number,
+    targetType: string,
+  ): Promise<Connection[]> {
+    return Array.from(this.connections.values()).filter(
+      (conn) => conn.targetId === targetId && conn.targetType === targetType,
+    );
   }
 
   async createConnection(connection: InsertConnection): Promise<Connection> {
     // Check if connection already exists
-    const existing = Array.from(this.connections.values())
-      .find(conn => 
-        conn.sourceId === connection.sourceId && 
+    const existing = Array.from(this.connections.values()).find(
+      (conn) =>
+        conn.sourceId === connection.sourceId &&
         conn.sourceType === connection.sourceType &&
         conn.targetId === connection.targetId &&
-        conn.targetType === connection.targetType
-      );
-    
+        conn.targetType === connection.targetType,
+    );
+
     if (existing) {
       // Increase strength if it exists
       const updatedConn = {
         ...existing,
-        strength: existing.strength + 1
+        strength: existing.strength + 1,
       };
       this.connections.set(existing.id, updatedConn);
       return updatedConn;
     }
-    
+
     const id = this.connectionCurrentId++;
     const now = new Date();
-    const newConnection: Connection = { 
-      ...connection, 
-      id, 
-      createdAt: now
+    const newConnection: Connection = {
+      ...connection,
+      id,
+      createdAt: now,
     };
     this.connections.set(id, newConnection);
-    
+
     // Create activity for connection creation
     this.createActivity({
       action: "created_connection",
       entityId: id,
       entityType: "connection",
-      metadata: { 
-        sourceId: connection.sourceId, 
+      metadata: {
+        sourceId: connection.sourceId,
         sourceType: connection.sourceType,
         targetId: connection.targetId,
-        targetType: connection.targetType
-      }
+        targetType: connection.targetType,
+      },
     });
-    
+
     return newConnection;
   }
 
-  async updateConnection(id: number, connection: Partial<InsertConnection>): Promise<Connection | undefined> {
+  async updateConnection(
+    id: number,
+    connection: Partial<InsertConnection>,
+  ): Promise<Connection | undefined> {
     const existingConnection = this.connections.get(id);
     if (!existingConnection) return undefined;
 
-    const updatedConnection: Connection = { 
-      ...existingConnection, 
-      ...connection 
+    const updatedConnection: Connection = {
+      ...existingConnection,
+      ...connection,
     };
     this.connections.set(id, updatedConnection);
     return updatedConnection;
@@ -520,8 +611,9 @@ export class MemStorage implements IStorage {
 
   // Daily Prompts
   async getDailyPrompts(): Promise<DailyPrompt[]> {
-    return Array.from(this.dailyPrompts.values())
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return Array.from(this.dailyPrompts.values()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
   }
 
   async getDailyPrompt(id: number): Promise<DailyPrompt | undefined> {
@@ -536,36 +628,39 @@ export class MemStorage implements IStorage {
   async createDailyPrompt(prompt: InsertDailyPrompt): Promise<DailyPrompt> {
     const id = this.dailyPromptCurrentId++;
     const now = new Date();
-    const newPrompt: DailyPrompt = { 
-      ...prompt, 
-      id, 
-      date: now, 
-      isAnswered: false 
+    const newPrompt: DailyPrompt = {
+      ...prompt,
+      id,
+      date: now,
+      isAnswered: false,
     };
     this.dailyPrompts.set(id, newPrompt);
     return newPrompt;
   }
 
-  async updateDailyPrompt(id: number, prompt: Partial<DailyPrompt>): Promise<DailyPrompt | undefined> {
+  async updateDailyPrompt(
+    id: number,
+    prompt: Partial<DailyPrompt>,
+  ): Promise<DailyPrompt | undefined> {
     const existingPrompt = this.dailyPrompts.get(id);
     if (!existingPrompt) return undefined;
 
-    const updatedPrompt: DailyPrompt = { 
-      ...existingPrompt, 
-      ...prompt 
+    const updatedPrompt: DailyPrompt = {
+      ...existingPrompt,
+      ...prompt,
     };
     this.dailyPrompts.set(id, updatedPrompt);
-    
+
     // If the prompt was answered, create an activity
     if (prompt.isAnswered && !existingPrompt.isAnswered) {
       this.createActivity({
         action: "answered_prompt",
         entityId: id,
         entityType: "daily_prompt",
-        metadata: { prompt: existingPrompt.prompt }
+        metadata: { prompt: existingPrompt.prompt },
       });
     }
-    
+
     return updatedPrompt;
   }
 
@@ -575,9 +670,11 @@ export class MemStorage implements IStorage {
 
   // Activities
   async getActivities(limit?: number): Promise<Activity[]> {
-    const activities = Array.from(this.activities.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
+    const activities = Array.from(this.activities.values()).sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+
     return limit ? activities.slice(0, limit) : activities;
   }
 
@@ -588,10 +685,10 @@ export class MemStorage implements IStorage {
   async createActivity(activity: InsertActivity): Promise<Activity> {
     const id = this.activityCurrentId++;
     const now = new Date();
-    const newActivity: Activity = { 
-      ...activity, 
-      id, 
-      timestamp: now 
+    const newActivity: Activity = {
+      ...activity,
+      id,
+      timestamp: now,
     };
     this.activities.set(id, newActivity);
     return newActivity;
@@ -602,57 +699,57 @@ export class MemStorage implements IStorage {
   }
 
   // Graph Data
-  async getGraphData(): Promise<{ nodes: any[], links: any[] }> {
+  async getGraphData(): Promise<{ nodes: any[]; links: any[] }> {
     const nodes: any[] = [];
     const links: any[] = [];
-    
+
     // Add notes as nodes
     const allNotes = await this.getNotes();
     for (const note of allNotes) {
       const noteTags = await this.getNoteTagsByNoteId(note.id);
-      const tags = noteTags.map(tag => ({ id: tag.id, name: tag.name }));
-      
+      const tags = noteTags.map((tag) => ({ id: tag.id, name: tag.name }));
+
       nodes.push({
         id: `note-${note.id}`,
-        type: 'note',
+        type: "note",
         title: note.title,
         tags,
-        createdAt: note.createdAt
+        createdAt: note.createdAt,
       });
     }
-    
+
     // Add links as nodes
     const allLinks = await this.getLinks();
     for (const link of allLinks) {
       const linkTags = await this.getLinkTagsByLinkId(link.id);
-      const tags = linkTags.map(tag => ({ id: tag.id, name: tag.name }));
-      
+      const tags = linkTags.map((tag) => ({ id: tag.id, name: tag.name }));
+
       nodes.push({
         id: `link-${link.id}`,
-        type: 'link',
+        type: "link",
         title: link.title,
         url: link.url,
         tags,
-        createdAt: link.createdAt
+        createdAt: link.createdAt,
       });
     }
-    
+
     // Add connections as links
     const allConnections = await this.getConnections();
     for (const connection of allConnections) {
       graphLinks.push({
         source: `${connection.sourceType}-${connection.sourceId}`,
         target: `${connection.targetType}-${connection.targetId}`,
-        strength: connection.strength
+        strength: connection.strength,
       });
     }
-    
+
     return { nodes, links };
   }
 }
 
-import { db } from './db';
-import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
+import { db } from "./db";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 
 // Fix for the type errors, import the actual table variables
 import {
@@ -663,8 +760,8 @@ import {
   linkTags,
   connections,
   dailyPrompts,
-  activities
-} from '@shared/schema';
+  activities,
+} from "@shared/schema";
 
 export class DatabaseStorage implements IStorage {
   // Notes
@@ -679,7 +776,7 @@ export class DatabaseStorage implements IStorage {
       // Group the results by note ID and collect the tags
       const noteMap = new Map<number, Note & { tags: Tag[] }>();
 
-      result.forEach(row => {
+      result.forEach((row) => {
         const note = row.notes;
         if (!note) return;
 
@@ -693,7 +790,7 @@ export class DatabaseStorage implements IStorage {
         if (row.tags) {
           const noteWithTags = noteMap.get(note.id)!;
           // Check if this tag is already in the tags array
-          if (!noteWithTags.tags.some(t => t.id === row.tags!.id)) {
+          if (!noteWithTags.tags.some((t) => t.id === row.tags!.id)) {
             noteWithTags.tags.push(row.tags);
           }
         }
@@ -709,41 +806,41 @@ export class DatabaseStorage implements IStorage {
   async getNote(id: number): Promise<Note | undefined> {
     try {
       console.log(`Fetching note with id ${id}`);
-      
+
       // First, get the note
       const [noteResult] = await db
         .select()
         .from(notes)
         .where(eq(notes.id, id));
-      
+
       if (!noteResult) {
         console.log(`Note with id ${id} not found`);
         return undefined;
       }
-      
+
       console.log(`Found note with id ${id}:`, noteResult);
 
       // Then, get tags for this note
       const tagResults = await db
         .select({
-          tag: tags
+          tag: tags,
         })
         .from(noteTags)
         .leftJoin(tags, eq(noteTags.tagId, tags.id))
         .where(eq(noteTags.noteId, id));
-      
+
       console.log(`Found ${tagResults.length} tags for note ${id}`);
-      
+
       // Extract unique tags
       const noteTagsList: Tag[] = [];
-      tagResults.forEach(row => {
-        if (row.tag && !noteTagsList.some(t => t.id === row.tag.id)) {
+      tagResults.forEach((row) => {
+        if (row.tag && !noteTagsList.some((t) => t.id === row.tag.id)) {
           noteTagsList.push(row.tag);
         }
       });
 
       console.log(`Returning note with ${noteTagsList.length} tags`);
-      
+
       return {
         ...noteResult,
         tags: noteTagsList,
@@ -779,12 +876,10 @@ export class DatabaseStorage implements IStorage {
 
           if (tag) {
             // Add tag to note
-            await db
-              .insert(noteTags)
-              .values({
-                noteId: newNote.id,
-                tagId,
-              });
+            await db.insert(noteTags).values({
+              noteId: newNote.id,
+              tagId,
+            });
 
             tags.push(tag);
           }
@@ -796,7 +891,7 @@ export class DatabaseStorage implements IStorage {
         action: "created_note",
         entityId: newNote.id,
         entityType: "note",
-        metadata: { title: note.title }
+        metadata: { title: note.title },
       });
 
       return {
@@ -809,7 +904,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined> {
+  async updateNote(
+    id: number,
+    note: Partial<InsertNote>,
+  ): Promise<Note | undefined> {
     try {
       // Get existing note
       const [existingNote] = await db
@@ -837,9 +935,7 @@ export class DatabaseStorage implements IStorage {
       let tagsList: Tag[] = [];
       if (tagIds !== undefined) {
         // Delete existing note-tag relationships
-        await db
-          .delete(noteTags)
-          .where(eq(noteTags.noteId, id));
+        await db.delete(noteTags).where(eq(noteTags.noteId, id));
 
         // Add new note-tag relationships
         for (const tagId of tagIds) {
@@ -850,12 +946,10 @@ export class DatabaseStorage implements IStorage {
             .limit(1);
 
           if (tag) {
-            await db
-              .insert(noteTags)
-              .values({
-                noteId: id,
-                tagId,
-              });
+            await db.insert(noteTags).values({
+              noteId: id,
+              tagId,
+            });
 
             tagsList.push(tag);
           }
@@ -868,7 +962,7 @@ export class DatabaseStorage implements IStorage {
           .innerJoin(noteTags, eq(tags.id, noteTags.tagId))
           .where(eq(noteTags.noteId, id));
 
-        tagsList = tagsResult.map(row => row.tags);
+        tagsList = tagsResult.map((row) => row.tags);
       }
 
       // Create activity for note update
@@ -876,7 +970,7 @@ export class DatabaseStorage implements IStorage {
         action: "updated_note",
         entityId: id,
         entityType: "note",
-        metadata: { title: updatedNote.title }
+        metadata: { title: updatedNote.title },
       });
 
       return {
@@ -892,9 +986,7 @@ export class DatabaseStorage implements IStorage {
   async deleteNote(id: number): Promise<boolean> {
     try {
       // Delete note-tag relationships
-      await db
-        .delete(noteTags)
-        .where(eq(noteTags.noteId, id));
+      await db.delete(noteTags).where(eq(noteTags.noteId, id));
 
       // Delete connections
       await db
@@ -903,20 +995,17 @@ export class DatabaseStorage implements IStorage {
           or(
             and(
               eq(connections.sourceId, id),
-              eq(connections.sourceType, 'note')
+              eq(connections.sourceType, "note"),
             ),
             and(
               eq(connections.targetId, id),
-              eq(connections.targetType, 'note')
-            )
-          )
+              eq(connections.targetType, "note"),
+            ),
+          ),
         );
 
       // Delete note
-      const result = await db
-        .delete(notes)
-        .where(eq(notes.id, id))
-        .returning();
+      const result = await db.delete(notes).where(eq(notes.id, id)).returning();
 
       if (result.length > 0) {
         // Create activity for note deletion
@@ -924,7 +1013,7 @@ export class DatabaseStorage implements IStorage {
           action: "deleted_note",
           entityId: id,
           entityType: "note",
-          metadata: {}
+          metadata: {},
         });
       }
 
@@ -947,7 +1036,7 @@ export class DatabaseStorage implements IStorage {
       // Group the results by link ID and collect the tags
       const linkMap = new Map<number, Link & { tags: Tag[] }>();
 
-      result.forEach(row => {
+      result.forEach((row) => {
         const link = row.links;
         if (!link) return;
 
@@ -961,7 +1050,7 @@ export class DatabaseStorage implements IStorage {
         if (row.tags) {
           const linkWithTags = linkMap.get(link.id)!;
           // Check if this tag is already in the tags array
-          if (!linkWithTags.tags.some(t => t.id === row.tags!.id)) {
+          if (!linkWithTags.tags.some((t) => t.id === row.tags!.id)) {
             linkWithTags.tags.push(row.tags);
           }
         }
@@ -989,10 +1078,10 @@ export class DatabaseStorage implements IStorage {
       if (!link) return undefined;
 
       const linkTags: Tag[] = [];
-      result.forEach(row => {
+      result.forEach((row) => {
         if (row.tags) {
           // Check if this tag is already in the tags array
-          if (!linkTags.some(t => t.id === row.tags!.id)) {
+          if (!linkTags.some((t) => t.id === row.tags!.id)) {
             linkTags.push(row.tags);
           }
         }
@@ -1050,12 +1139,10 @@ export class DatabaseStorage implements IStorage {
             .limit(1);
 
           if (tag) {
-            await db
-              .insert(linkTags)
-              .values({
-                linkId: newLink.id,
-                tagId,
-              });
+            await db.insert(linkTags).values({
+              linkId: newLink.id,
+              tagId,
+            });
 
             linkTags.push(tag);
           }
@@ -1067,7 +1154,7 @@ export class DatabaseStorage implements IStorage {
         action: "saved_link",
         entityId: newLink.id,
         entityType: "link",
-        metadata: { title: link.title, url: link.url }
+        metadata: { title: link.title, url: link.url },
       });
 
       return {
@@ -1080,7 +1167,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateLink(id: number, link: Partial<InsertLink>): Promise<Link | undefined> {
+  async updateLink(
+    id: number,
+    link: Partial<InsertLink>,
+  ): Promise<Link | undefined> {
     try {
       // Get existing link
       const [existingLink] = await db
@@ -1105,9 +1195,7 @@ export class DatabaseStorage implements IStorage {
       let linkTagList: Tag[] = [];
       if (link.tags !== undefined) {
         // Delete existing link-tag relationships
-        await db
-          .delete(linkTags)
-          .where(eq(linkTags.linkId, id));
+        await db.delete(linkTags).where(eq(linkTags.linkId, id));
 
         // Add new link-tag relationships
         for (const tagId of link.tags) {
@@ -1118,12 +1206,10 @@ export class DatabaseStorage implements IStorage {
             .limit(1);
 
           if (tag) {
-            await db
-              .insert(linkTags)
-              .values({
-                linkId: id,
-                tagId,
-              });
+            await db.insert(linkTags).values({
+              linkId: id,
+              tagId,
+            });
 
             linkTagList.push(tag);
           }
@@ -1136,7 +1222,7 @@ export class DatabaseStorage implements IStorage {
           .innerJoin(linkTags, eq(tags.id, linkTags.tagId))
           .where(eq(linkTags.linkId, id));
 
-        linkTagList = tagsResult.map(row => row.tags);
+        linkTagList = tagsResult.map((row) => row.tags);
       }
 
       // Create activity for link update
@@ -1144,7 +1230,7 @@ export class DatabaseStorage implements IStorage {
         action: "updated_link",
         entityId: id,
         entityType: "link",
-        metadata: { title: updatedLink.title }
+        metadata: { title: updatedLink.title },
       });
 
       return {
@@ -1160,9 +1246,7 @@ export class DatabaseStorage implements IStorage {
   async deleteLink(id: number): Promise<boolean> {
     try {
       // Delete link-tag relationships
-      await db
-        .delete(linkTags)
-        .where(eq(linkTags.linkId, id));
+      await db.delete(linkTags).where(eq(linkTags.linkId, id));
 
       // Delete connections
       await db
@@ -1171,20 +1255,17 @@ export class DatabaseStorage implements IStorage {
           or(
             and(
               eq(connections.sourceId, id),
-              eq(connections.sourceType, 'link')
+              eq(connections.sourceType, "link"),
             ),
             and(
               eq(connections.targetId, id),
-              eq(connections.targetType, 'link')
-            )
-          )
+              eq(connections.targetType, "link"),
+            ),
+          ),
         );
 
       // Delete link
-      const result = await db
-        .delete(links)
-        .where(eq(links.id, id))
-        .returning();
+      const result = await db.delete(links).where(eq(links.id, id)).returning();
 
       if (result.length > 0) {
         // Create activity for link deletion
@@ -1192,7 +1273,7 @@ export class DatabaseStorage implements IStorage {
           action: "deleted_link",
           entityId: id,
           entityType: "link",
-          metadata: {}
+          metadata: {},
         });
       }
 
@@ -1208,30 +1289,31 @@ export class DatabaseStorage implements IStorage {
     try {
       // Get all tags
       const allTags = await db.select().from(tags);
-      
+
       // For each tag, count the notes and links that have it
       const tagsWithCount: (Tag & { count: number })[] = [];
-      
+
       for (const tag of allTags) {
         // Count notes with this tag
         const noteTagsCount = await db
           .select({ count: sql<number>`count(*)` })
           .from(noteTags)
           .where(eq(noteTags.tagId, tag.id));
-          
+
         // Count links with this tag
         const linkTagsCount = await db
           .select({ count: sql<number>`count(*)` })
           .from(linkTags)
           .where(eq(linkTags.tagId, tag.id));
-          
+
         // Add tag with count to result
         tagsWithCount.push({
           ...tag,
-          count: Number(noteTagsCount[0].count) + Number(linkTagsCount[0].count)
+          count:
+            Number(noteTagsCount[0].count) + Number(linkTagsCount[0].count),
         });
       }
-      
+
       return tagsWithCount;
     } catch (error) {
       console.error("Error getting tags:", error);
@@ -1286,7 +1368,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateTag(id: number, tag: Partial<InsertTag>): Promise<Tag | undefined> {
+  async updateTag(
+    id: number,
+    tag: Partial<InsertTag>,
+  ): Promise<Tag | undefined> {
     try {
       const [updatedTag] = await db
         .update(tags)
@@ -1308,22 +1393,15 @@ export class DatabaseStorage implements IStorage {
       if (!existingTag) {
         return false;
       }
-      
+
       // Delete note-tag relationships
-      await db
-        .delete(noteTags)
-        .where(eq(noteTags.tagId, id));
+      await db.delete(noteTags).where(eq(noteTags.tagId, id));
 
       // Delete link-tag relationships
-      await db
-        .delete(linkTags)
-        .where(eq(linkTags.tagId, id));
+      await db.delete(linkTags).where(eq(linkTags.tagId, id));
 
       // Delete tag
-      const result = await db
-        .delete(tags)
-        .where(eq(tags.id, id))
-        .returning();
+      const result = await db.delete(tags).where(eq(tags.id, id)).returning();
 
       return result.length > 0;
     } catch (error) {
@@ -1334,18 +1412,13 @@ export class DatabaseStorage implements IStorage {
 
   // Note Tags
   async getNoteTagsByNoteId(noteId: number): Promise<Tag[]> {
-    try {
-      const result = await db
-        .select()
-        .from(tags)
-        .innerJoin(noteTags, eq(tags.id, noteTags.tagId))
-        .where(eq(noteTags.noteId, noteId));
+    const noteTagIds = Array.from(this.noteTags.values())
+      .filter((nt) => nt.noteId === noteId)
+      .map((nt) => nt.tagId);
 
-      return result.map(row => row.tags);
-    } catch (error) {
-      console.error(`Error getting tags for note with id ${noteId}:`, error);
-      return [];
-    }
+    return Array.from(this.tags.values()).filter((tag) =>
+      noteTagIds.includes(tag.id),
+    );
   }
 
   async getNoteTagsByTagId(tagId: number): Promise<Note[]> {
@@ -1354,9 +1427,33 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(notes)
         .innerJoin(noteTags, eq(notes.id, noteTags.noteId))
-        .where(eq(noteTags.tagId, tagId));
+        .where(eq(noteTags.tagId, tagId))
+        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .leftJoin(tags, eq(noteTags.tagId, tags.id));
 
-      return result.map(row => row.notes);
+      // Group notes and their tags
+      const notesMap = new Map<number, Note & { tags: Tag[] }>();
+
+      result.forEach((row) => {
+        if (!row.notes) return;
+
+        if (!notesMap.has(row.notes.id)) {
+          notesMap.set(row.notes.id, {
+            ...row.notes,
+            tags: [],
+          });
+        }
+
+        if (row.tags) {
+          const noteWithTags = notesMap.get(row.notes.id)!;
+          // Check if this tag is already in the tags array
+          if (!noteWithTags.tags.some((t) => t.id === row.tags!.id)) {
+            noteWithTags.tags.push(row.tags);
+          }
+        }
+      });
+
+      return Array.from(notesMap.values());
     } catch (error) {
       console.error(`Error getting notes for tag with id ${tagId}:`, error);
       return [];
@@ -1369,10 +1466,7 @@ export class DatabaseStorage implements IStorage {
       const existing = await db
         .select()
         .from(noteTags)
-        .where(and(
-          eq(noteTags.noteId, noteId),
-          eq(noteTags.tagId, tagId)
-        ))
+        .where(and(eq(noteTags.noteId, noteId), eq(noteTags.tagId, tagId)))
         .limit(1);
 
       if (existing.length > 0) {
@@ -1398,12 +1492,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const result = await db
         .delete(noteTags)
-        .where(
-          and(
-            eq(noteTags.noteId, noteId),
-            eq(noteTags.tagId, tagId)
-          )
-        )
+        .where(and(eq(noteTags.noteId, noteId), eq(noteTags.tagId, tagId)))
         .returning();
 
       return result.length > 0;
@@ -1422,7 +1511,7 @@ export class DatabaseStorage implements IStorage {
         .innerJoin(linkTags, eq(tags.id, linkTags.tagId))
         .where(eq(linkTags.linkId, linkId));
 
-      return result.map(row => row.tags);
+      return result.map((row) => row.tags);
     } catch (error) {
       console.error(`Error getting tags for link with id ${linkId}:`, error);
       return [];
@@ -1437,7 +1526,7 @@ export class DatabaseStorage implements IStorage {
         .innerJoin(linkTags, eq(links.id, linkTags.linkId))
         .where(eq(linkTags.tagId, tagId));
 
-      return result.map(row => row.links);
+      return result.map((row) => row.links);
     } catch (error) {
       console.error(`Error getting links for tag with id ${tagId}:`, error);
       return [];
@@ -1450,10 +1539,7 @@ export class DatabaseStorage implements IStorage {
       const existing = await db
         .select()
         .from(linkTags)
-        .where(and(
-          eq(linkTags.linkId, linkId),
-          eq(linkTags.tagId, tagId)
-        ))
+        .where(and(eq(linkTags.linkId, linkId), eq(linkTags.tagId, tagId)))
         .limit(1);
 
       if (existing.length > 0) {
@@ -1479,12 +1565,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const result = await db
         .delete(linkTags)
-        .where(
-          and(
-            eq(linkTags.linkId, linkId),
-            eq(linkTags.tagId, tagId)
-          )
-        )
+        .where(and(eq(linkTags.linkId, linkId), eq(linkTags.tagId, tagId)))
         .returning();
 
       return result.length > 0;
@@ -1519,7 +1600,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getConnectionsBySourceId(sourceId: number, sourceType: string): Promise<Connection[]> {
+  async getConnectionsBySourceId(
+    sourceId: number,
+    sourceType: string,
+  ): Promise<Connection[]> {
     try {
       return await db
         .select()
@@ -1527,16 +1611,22 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(connections.sourceId, sourceId),
-            eq(connections.sourceType, sourceType)
-          )
+            eq(connections.sourceType, sourceType),
+          ),
         );
     } catch (error) {
-      console.error(`Error getting connections for source ${sourceType}-${sourceId}:`, error);
+      console.error(
+        `Error getting connections for source ${sourceType}-${sourceId}:`,
+        error,
+      );
       return [];
     }
   }
 
-  async getConnectionsByTargetId(targetId: number, targetType: string): Promise<Connection[]> {
+  async getConnectionsByTargetId(
+    targetId: number,
+    targetType: string,
+  ): Promise<Connection[]> {
     try {
       return await db
         .select()
@@ -1544,11 +1634,14 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(connections.targetId, targetId),
-            eq(connections.targetType, targetType)
-          )
+            eq(connections.targetType, targetType),
+          ),
         );
     } catch (error) {
-      console.error(`Error getting connections for target ${targetType}-${targetId}:`, error);
+      console.error(
+        `Error getting connections for target ${targetType}-${targetId}:`,
+        error,
+      );
       return [];
     }
   }
@@ -1564,8 +1657,8 @@ export class DatabaseStorage implements IStorage {
             eq(connections.sourceId, connection.sourceId),
             eq(connections.sourceType, connection.sourceType),
             eq(connections.targetId, connection.targetId),
-            eq(connections.targetType, connection.targetType)
-          )
+            eq(connections.targetType, connection.targetType),
+          ),
         )
         .limit(1);
 
@@ -1600,12 +1693,12 @@ export class DatabaseStorage implements IStorage {
         action: "created_connection",
         entityId: newConnection.id,
         entityType: "connection",
-        metadata: { 
-          sourceId: connection.sourceId, 
+        metadata: {
+          sourceId: connection.sourceId,
           sourceType: connection.sourceType,
           targetId: connection.targetId,
-          targetType: connection.targetType
-        }
+          targetType: connection.targetType,
+        },
       });
 
       return newConnection;
@@ -1615,7 +1708,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateConnection(id: number, connection: Partial<InsertConnection>): Promise<Connection | undefined> {
+  async updateConnection(
+    id: number,
+    connection: Partial<InsertConnection>,
+  ): Promise<Connection | undefined> {
     try {
       const [updatedConnection] = await db
         .update(connections)
@@ -1695,7 +1791,7 @@ export class DatabaseStorage implements IStorage {
           prompt: prompt.prompt || "",
           answer: prompt.answer,
           date: new Date(),
-          isAnswered: false
+          isAnswered: false,
         })
         .returning();
 
@@ -1706,7 +1802,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateDailyPrompt(id: number, prompt: Partial<DailyPrompt>): Promise<DailyPrompt | undefined> {
+  async updateDailyPrompt(
+    id: number,
+    prompt: Partial<DailyPrompt>,
+  ): Promise<DailyPrompt | undefined> {
     try {
       const [updatedPrompt] = await db
         .update(dailyPrompts)
@@ -1804,7 +1903,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Graph Data
-  async getGraphData(): Promise<{ nodes: any[], links: any[] }> {
+  async getGraphData(): Promise<{ nodes: any[]; links: any[] }> {
     try {
       // Fetch all notes with their tags
       const notesResult = await db
@@ -1818,46 +1917,44 @@ export class DatabaseStorage implements IStorage {
         .select({
           links: links,
           tags: tags,
-          link_tags: linkTags
+          link_tags: linkTags,
         })
         .from(links)
         .leftJoin(linkTags, eq(links.id, linkTags.linkId))
         .leftJoin(tags, eq(linkTags.tagId, tags.id));
 
       // Fetch all connections
-      const connectionsResult = await db
-        .select()
-        .from(connections);
+      const connectionsResult = await db.select().from(connections);
 
       // Group notes and their tags
-      const notesMap = new Map<number, { note: Note, tags: Tag[] }>();
-      notesResult.forEach(row => {
+      const notesMap = new Map<number, { note: Note; tags: Tag[] }>();
+      notesResult.forEach((row) => {
         if (!row.notes) return;
-        
+
         if (!notesMap.has(row.notes.id)) {
           notesMap.set(row.notes.id, { note: row.notes, tags: [] });
         }
-        
+
         if (row.tags) {
           const noteData = notesMap.get(row.notes.id)!;
-          if (!noteData.tags.some(t => t.id === row.tags!.id)) {
+          if (!noteData.tags.some((t) => t.id === row.tags!.id)) {
             noteData.tags.push(row.tags);
           }
         }
       });
 
       // Group links and their tags
-      const linksMap = new Map<number, { link: Link, tags: Tag[] }>();
-      linksData.forEach(row => {
+      const linksMap = new Map<number, { link: Link; tags: Tag[] }>();
+      linksData.forEach((row) => {
         if (!row.links) return;
-        
+
         if (!linksMap.has(row.links.id)) {
           linksMap.set(row.links.id, { link: row.links, tags: [] });
         }
-        
+
         if (row.tags) {
           const linkData = linksMap.get(row.links.id)!;
-          if (!linkData.tags.some(t => t.id === row.tags!.id)) {
+          if (!linkData.tags.some((t) => t.id === row.tags!.id)) {
             linkData.tags.push(row.tags);
           }
         }
@@ -1872,9 +1969,9 @@ export class DatabaseStorage implements IStorage {
         nodes.push({
           id: `note-${note.id}`,
           label: note.title,
-          type: 'note',
+          type: "note",
           data: note,
-          tags
+          tags,
         });
       });
 
@@ -1883,55 +1980,55 @@ export class DatabaseStorage implements IStorage {
         nodes.push({
           id: `link-${link.id}`,
           label: link.title,
-          type: 'link',
+          type: "link",
           data: link,
-          tags
+          tags,
         });
       });
 
       // Add all tags as nodes
       const allTags = await db.select().from(tags);
-      allTags.forEach(tag => {
+      allTags.forEach((tag) => {
         nodes.push({
           id: `tag-${tag.id}`,
           label: tag.name,
-          type: 'tag',
-          data: tag
+          type: "tag",
+          data: tag,
         });
       });
 
       // Add connections as links
-      connectionsResult.forEach(connection => {
+      connectionsResult.forEach((connection) => {
         graphLinks.push({
           id: `connection-${connection.id}`,
           source: `${connection.sourceType}-${connection.sourceId}`,
           target: `${connection.targetType}-${connection.targetId}`,
-          label: connection.relationshipType || '',
-          data: connection
+          label: connection.relationshipType || "",
+          data: connection,
         });
       });
 
       // Add note-tag relationships
       const noteTagsResult = await db.select().from(noteTags);
-      noteTagsResult.forEach(noteTag => {
+      noteTagsResult.forEach((noteTag) => {
         graphLinks.push({
           id: `notetag-${noteTag.id}`,
           source: `note-${noteTag.noteId}`,
           target: `tag-${noteTag.tagId}`,
-          label: 'has_tag',
-          data: { type: 'tag_relationship' }
+          label: "has_tag",
+          data: { type: "tag_relationship" },
         });
       });
 
       // Add link-tag relationships
       const linkTagsResult = await db.select().from(linkTags);
-      linkTagsResult.forEach(linkTag => {
+      linkTagsResult.forEach((linkTag) => {
         graphLinks.push({
           id: `linktag-${linkTag.id}`,
           source: `link-${linkTag.linkId}`,
           target: `tag-${linkTag.tagId}`,
-          label: 'has_tag',
-          data: { type: 'tag_relationship' }
+          label: "has_tag",
+          data: { type: "tag_relationship" },
         });
       });
 
