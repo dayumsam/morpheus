@@ -136,7 +136,7 @@ export default function NoteEditorPage() {
     },
   });
 
-  // Auto-tag content using AI
+  // Auto-tag content using AI and apply tags to the note
   const autoTagContent = useCallback(async () => {
     if (!form.getValues('content')) {
       toast({
@@ -155,7 +155,42 @@ export default function NoteEditorPage() {
       });
       
       if (response.suggestedTags && Array.isArray(response.suggestedTags)) {
-        setSuggestedTags(response.suggestedTags);
+        const newTags = [...response.suggestedTags];
+        const tagsToApply: number[] = [];
+        const tagsToSuggest: string[] = [];
+        
+        // Process each suggested tag
+        for (const tagName of newTags) {
+          // Check if tag already exists
+          const existingTag = tags?.find(t => 
+            t.name.toLowerCase() === tagName.toLowerCase()
+          );
+          
+          if (existingTag) {
+            // Add to the current selection if not already selected
+            if (!selectedTags.includes(existingTag.id)) {
+              tagsToApply.push(existingTag.id);
+            }
+          } else {
+            // Add to suggestions for tags that don't exist yet
+            tagsToSuggest.push(tagName);
+          }
+        }
+        
+        // Add existing tags to the note
+        if (tagsToApply.length > 0) {
+          const newSelectedTags = [...selectedTags, ...tagsToApply];
+          setSelectedTags(newSelectedTags);
+          form.setValue('tags', newSelectedTags);
+          
+          toast({
+            title: 'Tags added',
+            description: `Added ${tagsToApply.length} tag${tagsToApply.length === 1 ? '' : 's'} to your note.`,
+          });
+        }
+        
+        // Set the remaining tags as suggestions
+        setSuggestedTags(tagsToSuggest);
       }
     } catch (error: any) {
       toast({
@@ -166,7 +201,7 @@ export default function NoteEditorPage() {
     } finally {
       setIsAutoTagging(false);
     }
-  }, [form, toast]);
+  }, [form, toast, tags, selectedTags]);
 
   // Apply suggested tags
   const applyTagSuggestions = async () => {

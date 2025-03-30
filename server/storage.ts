@@ -651,4 +651,1271 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { db } from './db';
+import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
+
+// Fix for the type errors, import the actual table variables
+import {
+  notes,
+  links,
+  tags,
+  noteTags,
+  linkTags,
+  connections,
+  dailyPrompts,
+  activities
+} from '@shared/schema';
+
+export class DatabaseStorage implements IStorage {
+  // Notes
+  async getNotes(): Promise<Note[]> {
+    try {
+      const result = await db
+        .select()
+        .from(notes)
+        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .leftJoin(tags, eq(noteTags.tagId, tags.id));
+
+      // Group the results by note ID and collect the tags
+      const noteMap = new Map<number, Note & { tags: Tag[] }>();
+
+      result.forEach(row => {
+        const note = row.notes;
+        if (!note) return;
+
+        if (!noteMap.has(note.id)) {
+          noteMap.set(note.id, {
+            ...note,
+            tags: [],
+          });
+        }
+
+        if (row.tags) {
+          const noteWithTags = noteMap.get(note.id)!;
+          // Check if this tag is already in the tags array
+          if (!noteWithTags.tags.some(t => t.id === row.tags!.id)) {
+            noteWithTags.tags.push(row.tags);
+          }
+        }
+      });
+
+      return Array.from(noteMap.values());
+    } catch (error) {
+      console.error("Error getting notes:", error);
+      return [];
+    }
+  }
+
+  async getNote(id: number): Promise<Note | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(notes)
+        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .leftJoin(tags, eq(noteTags.tagId, tags.id))
+        .where(eq(notes.id, id));
+
+      if (result.length === 0) return undefined;
+
+      const note = result[0].notes;
+      if (!note) return undefined;
+
+      const noteTags: Tag[] = [];
+      result.forEach(row => {
+        if (row.tags) {
+          // Check if this tag is already in the tags array
+          if (!noteTags.some(t => t.id === row.tags!.id)) {
+            noteTags.push(row.tags);
+          }
+        }
+      });
+
+      return {
+        ...note,
+        tags: noteTags,
+      };
+    } catch (error) {
+      console.error(`Error getting note with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createNote(note: InsertNote): Promise<Note> {
+    try {
+      const [newNote] = await db
+        .insert(notes)
+        .values({
+          title: note.title,
+          content: note.content,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .returning();
+
+      // Add tags if provided
+      const tags: Tag[] = [];
+      if (note.tags && note.tags.length > 0) {
+        for (const tagId of note.tags) {
+          // Check if tag exists
+          const [tag] = await db
+            .select()
+            .from(tags)
+            .where(eq(tags.id, tagId))
+            .limit(1);
+
+          if (tag) {
+            // Add tag to note
+            await db
+              .insert(noteTags)
+              .values({
+                noteId: newNote.id,
+                tagId,
+              });
+
+            tags.push(tag);
+          }
+        }
+      }
+
+      // Create activity for note creation
+      this.createActivity({
+        action: "created_note",
+        entityId: newNote.id,
+        entityType: "note",
+        metadata: { title: note.title }
+      });
+
+      return {
+        ...newNote,
+        tags,
+      };
+    } catch (error) {
+      console.error("Error creating note:", error);
+      throw error;
+    }
+  }
+
+  async updateNote(id: number, note: Partial<InsertNote>): Promise<Note | undefined> {
+    try {
+      // Get existing note
+      const [existingNote] = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, id))
+        .limit(1);
+
+      if (!existingNote) return undefined;
+
+      // Update note
+      const [updatedNote] = await db
+        .update(notes)
+        .set({
+          ...note,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(notes.id, id))
+        .returning();
+
+      // Update tags if provided
+      let noteTags: Tag[] = [];
+      if (note.tags !== undefined) {
+        // Delete existing note-tag relationships
+        await db
+          .delete(noteTags)
+          .where(eq(noteTags.noteId, id));
+
+        // Add new note-tag relationships
+        for (const tagId of note.tags) {
+          const [tag] = await db
+            .select()
+            .from(tags)
+            .where(eq(tags.id, tagId))
+            .limit(1);
+
+          if (tag) {
+            await db
+              .insert(noteTags)
+              .values({
+                noteId: id,
+                tagId,
+              });
+
+            noteTags.push(tag);
+          }
+        }
+      } else {
+        // Get current note tags
+        const tagsResult = await db
+          .select()
+          .from(tags)
+          .innerJoin(noteTags, eq(tags.id, noteTags.tagId))
+          .where(eq(noteTags.noteId, id));
+
+        noteTags = tagsResult.map(row => row.tags);
+      }
+
+      // Create activity for note update
+      this.createActivity({
+        action: "updated_note",
+        entityId: id,
+        entityType: "note",
+        metadata: { title: updatedNote.title }
+      });
+
+      return {
+        ...updatedNote,
+        tags: noteTags,
+      };
+    } catch (error) {
+      console.error(`Error updating note with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteNote(id: number): Promise<boolean> {
+    try {
+      // Delete note-tag relationships
+      await db
+        .delete(noteTags)
+        .where(eq(noteTags.noteId, id));
+
+      // Delete connections
+      await db
+        .delete(connections)
+        .where(
+          or(
+            and(
+              eq(connections.sourceId, id),
+              eq(connections.sourceType, 'note')
+            ),
+            and(
+              eq(connections.targetId, id),
+              eq(connections.targetType, 'note')
+            )
+          )
+        );
+
+      // Delete note
+      const result = await db
+        .delete(notes)
+        .where(eq(notes.id, id))
+        .returning();
+
+      if (result.length > 0) {
+        // Create activity for note deletion
+        this.createActivity({
+          action: "deleted_note",
+          entityId: id,
+          entityType: "note",
+          metadata: {}
+        });
+      }
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting note with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Links
+  async getLinks(): Promise<Link[]> {
+    try {
+      const result = await db
+        .select()
+        .from(links)
+        .leftJoin(linkTags, eq(links.id, linkTags.linkId))
+        .leftJoin(tags, eq(linkTags.tagId, tags.id));
+
+      // Group the results by link ID and collect the tags
+      const linkMap = new Map<number, Link & { tags: Tag[] }>();
+
+      result.forEach(row => {
+        const link = row.links;
+        if (!link) return;
+
+        if (!linkMap.has(link.id)) {
+          linkMap.set(link.id, {
+            ...link,
+            tags: [],
+          });
+        }
+
+        if (row.tags) {
+          const linkWithTags = linkMap.get(link.id)!;
+          // Check if this tag is already in the tags array
+          if (!linkWithTags.tags.some(t => t.id === row.tags!.id)) {
+            linkWithTags.tags.push(row.tags);
+          }
+        }
+      });
+
+      return Array.from(linkMap.values());
+    } catch (error) {
+      console.error("Error getting links:", error);
+      return [];
+    }
+  }
+
+  async getLink(id: number): Promise<Link | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(links)
+        .leftJoin(linkTags, eq(links.id, linkTags.linkId))
+        .leftJoin(tags, eq(linkTags.tagId, tags.id))
+        .where(eq(links.id, id));
+
+      if (result.length === 0) return undefined;
+
+      const link = result[0].links;
+      if (!link) return undefined;
+
+      const linkTags: Tag[] = [];
+      result.forEach(row => {
+        if (row.tags) {
+          // Check if this tag is already in the tags array
+          if (!linkTags.some(t => t.id === row.tags!.id)) {
+            linkTags.push(row.tags);
+          }
+        }
+      });
+
+      return {
+        ...link,
+        tags: linkTags,
+      };
+    } catch (error) {
+      console.error(`Error getting link with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getLinkByUrl(url: string): Promise<Link | undefined> {
+    try {
+      const [link] = await db
+        .select()
+        .from(links)
+        .where(eq(links.url, url))
+        .limit(1);
+
+      if (!link) return undefined;
+
+      return this.getLink(link.id);
+    } catch (error) {
+      console.error(`Error getting link by URL ${url}:`, error);
+      return undefined;
+    }
+  }
+
+  async createLink(link: InsertLink): Promise<Link> {
+    try {
+      const [newLink] = await db
+        .insert(links)
+        .values({
+          title: link.title,
+          url: link.url,
+          description: link.description,
+          imageUrl: link.imageUrl,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .returning();
+
+      // Add tags if provided
+      const linkTags: Tag[] = [];
+      if (link.tags && link.tags.length > 0) {
+        for (const tagId of link.tags) {
+          const [tag] = await db
+            .select()
+            .from(tags)
+            .where(eq(tags.id, tagId))
+            .limit(1);
+
+          if (tag) {
+            await db
+              .insert(linkTags)
+              .values({
+                linkId: newLink.id,
+                tagId,
+              });
+
+            linkTags.push(tag);
+          }
+        }
+      }
+
+      // Create activity for link creation
+      this.createActivity({
+        action: "saved_link",
+        entityId: newLink.id,
+        entityType: "link",
+        metadata: { title: link.title, url: link.url }
+      });
+
+      return {
+        ...newLink,
+        tags: linkTags,
+      };
+    } catch (error) {
+      console.error("Error creating link:", error);
+      throw error;
+    }
+  }
+
+  async updateLink(id: number, link: Partial<InsertLink>): Promise<Link | undefined> {
+    try {
+      // Get existing link
+      const [existingLink] = await db
+        .select()
+        .from(links)
+        .where(eq(links.id, id))
+        .limit(1);
+
+      if (!existingLink) return undefined;
+
+      // Update link
+      const [updatedLink] = await db
+        .update(links)
+        .set({
+          ...link,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(links.id, id))
+        .returning();
+
+      // Update tags if provided
+      let linkTagList: Tag[] = [];
+      if (link.tags !== undefined) {
+        // Delete existing link-tag relationships
+        await db
+          .delete(linkTags)
+          .where(eq(linkTags.linkId, id));
+
+        // Add new link-tag relationships
+        for (const tagId of link.tags) {
+          const [tag] = await db
+            .select()
+            .from(tags)
+            .where(eq(tags.id, tagId))
+            .limit(1);
+
+          if (tag) {
+            await db
+              .insert(linkTags)
+              .values({
+                linkId: id,
+                tagId,
+              });
+
+            linkTagList.push(tag);
+          }
+        }
+      } else {
+        // Get current link tags
+        const tagsResult = await db
+          .select()
+          .from(tags)
+          .innerJoin(linkTags, eq(tags.id, linkTags.tagId))
+          .where(eq(linkTags.linkId, id));
+
+        linkTagList = tagsResult.map(row => row.tags);
+      }
+
+      // Create activity for link update
+      this.createActivity({
+        action: "updated_link",
+        entityId: id,
+        entityType: "link",
+        metadata: { title: updatedLink.title }
+      });
+
+      return {
+        ...updatedLink,
+        tags: linkTagList,
+      };
+    } catch (error) {
+      console.error(`Error updating link with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteLink(id: number): Promise<boolean> {
+    try {
+      // Delete link-tag relationships
+      await db
+        .delete(linkTags)
+        .where(eq(linkTags.linkId, id));
+
+      // Delete connections
+      await db
+        .delete(connections)
+        .where(
+          or(
+            and(
+              eq(connections.sourceId, id),
+              eq(connections.sourceType, 'link')
+            ),
+            and(
+              eq(connections.targetId, id),
+              eq(connections.targetType, 'link')
+            )
+          )
+        );
+
+      // Delete link
+      const result = await db
+        .delete(links)
+        .where(eq(links.id, id))
+        .returning();
+
+      if (result.length > 0) {
+        // Create activity for link deletion
+        this.createActivity({
+          action: "deleted_link",
+          entityId: id,
+          entityType: "link",
+          metadata: {}
+        });
+      }
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting link with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Tags
+  async getTags(): Promise<Tag[]> {
+    try {
+      return await db.select().from(tags);
+    } catch (error) {
+      console.error("Error getting tags:", error);
+      return [];
+    }
+  }
+
+  async getTag(id: number): Promise<Tag | undefined> {
+    try {
+      const [tag] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.id, id))
+        .limit(1);
+
+      return tag;
+    } catch (error) {
+      console.error(`Error getting tag with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getTagByName(name: string): Promise<Tag | undefined> {
+    try {
+      const [tag] = await db
+        .select()
+        .from(tags)
+        .where(sql`lower(${tags.name}) = lower(${name})`)
+        .limit(1);
+
+      return tag;
+    } catch (error) {
+      console.error(`Error getting tag by name ${name}:`, error);
+      return undefined;
+    }
+  }
+
+  async createTag(tag: InsertTag): Promise<Tag> {
+    try {
+      const [newTag] = await db
+        .insert(tags)
+        .values({
+          name: tag.name,
+          color: tag.color,
+        })
+        .returning();
+
+      return newTag;
+    } catch (error) {
+      console.error("Error creating tag:", error);
+      throw error;
+    }
+  }
+
+  async updateTag(id: number, tag: Partial<InsertTag>): Promise<Tag | undefined> {
+    try {
+      const [updatedTag] = await db
+        .update(tags)
+        .set(tag)
+        .where(eq(tags.id, id))
+        .returning();
+
+      return updatedTag;
+    } catch (error) {
+      console.error(`Error updating tag with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteTag(id: number): Promise<boolean> {
+    try {
+      // Delete note-tag relationships
+      await db
+        .delete(noteTags)
+        .where(eq(noteTags.tagId, id));
+
+      // Delete link-tag relationships
+      await db
+        .delete(linkTags)
+        .where(eq(linkTags.tagId, id));
+
+      // Delete tag
+      const result = await db
+        .delete(tags)
+        .where(eq(tags.id, id))
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting tag with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Note Tags
+  async getNoteTagsByNoteId(noteId: number): Promise<Tag[]> {
+    try {
+      const result = await db
+        .select()
+        .from(tags)
+        .innerJoin(noteTags, eq(tags.id, noteTags.tagId))
+        .where(eq(noteTags.noteId, noteId));
+
+      return result.map(row => row.tags);
+    } catch (error) {
+      console.error(`Error getting tags for note with id ${noteId}:`, error);
+      return [];
+    }
+  }
+
+  async getNoteTagsByTagId(tagId: number): Promise<Note[]> {
+    try {
+      const result = await db
+        .select()
+        .from(notes)
+        .innerJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .where(eq(noteTags.tagId, tagId));
+
+      return result.map(row => row.notes);
+    } catch (error) {
+      console.error(`Error getting notes for tag with id ${tagId}:`, error);
+      return [];
+    }
+  }
+
+  async addTagToNote(noteId: number, tagId: number): Promise<NoteTag> {
+    try {
+      // Check if already exists
+      const existing = await db
+        .select()
+        .from(noteTags)
+        .where(and(
+          eq(noteTags.noteId, noteId),
+          eq(noteTags.tagId, tagId)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return existing[0];
+      }
+
+      const [noteTag] = await db
+        .insert(noteTags)
+        .values({
+          noteId,
+          tagId,
+        })
+        .returning();
+
+      return noteTag;
+    } catch (error) {
+      console.error(`Error adding tag ${tagId} to note ${noteId}:`, error);
+      throw error;
+    }
+  }
+
+  async removeTagFromNote(noteId: number, tagId: number): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(noteTags)
+        .where(
+          and(
+            eq(noteTags.noteId, noteId),
+            eq(noteTags.tagId, tagId)
+          )
+        )
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error removing tag ${tagId} from note ${noteId}:`, error);
+      return false;
+    }
+  }
+
+  // Link Tags
+  async getLinkTagsByLinkId(linkId: number): Promise<Tag[]> {
+    try {
+      const result = await db
+        .select()
+        .from(tags)
+        .innerJoin(linkTags, eq(tags.id, linkTags.tagId))
+        .where(eq(linkTags.linkId, linkId));
+
+      return result.map(row => row.tags);
+    } catch (error) {
+      console.error(`Error getting tags for link with id ${linkId}:`, error);
+      return [];
+    }
+  }
+
+  async getLinkTagsByTagId(tagId: number): Promise<Link[]> {
+    try {
+      const result = await db
+        .select()
+        .from(links)
+        .innerJoin(linkTags, eq(links.id, linkTags.linkId))
+        .where(eq(linkTags.tagId, tagId));
+
+      return result.map(row => row.links);
+    } catch (error) {
+      console.error(`Error getting links for tag with id ${tagId}:`, error);
+      return [];
+    }
+  }
+
+  async addTagToLink(linkId: number, tagId: number): Promise<LinkTag> {
+    try {
+      // Check if already exists
+      const existing = await db
+        .select()
+        .from(linkTags)
+        .where(and(
+          eq(linkTags.linkId, linkId),
+          eq(linkTags.tagId, tagId)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return existing[0];
+      }
+
+      const [linkTag] = await db
+        .insert(linkTags)
+        .values({
+          linkId,
+          tagId,
+        })
+        .returning();
+
+      return linkTag;
+    } catch (error) {
+      console.error(`Error adding tag ${tagId} to link ${linkId}:`, error);
+      throw error;
+    }
+  }
+
+  async removeTagFromLink(linkId: number, tagId: number): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(linkTags)
+        .where(
+          and(
+            eq(linkTags.linkId, linkId),
+            eq(linkTags.tagId, tagId)
+          )
+        )
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error removing tag ${tagId} from link ${linkId}:`, error);
+      return false;
+    }
+  }
+
+  // Connections
+  async getConnections(): Promise<Connection[]> {
+    try {
+      return await db.select().from(connections);
+    } catch (error) {
+      console.error("Error getting connections:", error);
+      return [];
+    }
+  }
+
+  async getConnection(id: number): Promise<Connection | undefined> {
+    try {
+      const [connection] = await db
+        .select()
+        .from(connections)
+        .where(eq(connections.id, id))
+        .limit(1);
+
+      return connection;
+    } catch (error) {
+      console.error(`Error getting connection with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getConnectionsBySourceId(sourceId: number, sourceType: string): Promise<Connection[]> {
+    try {
+      return await db
+        .select()
+        .from(connections)
+        .where(
+          and(
+            eq(connections.sourceId, sourceId),
+            eq(connections.sourceType, sourceType)
+          )
+        );
+    } catch (error) {
+      console.error(`Error getting connections for source ${sourceType}-${sourceId}:`, error);
+      return [];
+    }
+  }
+
+  async getConnectionsByTargetId(targetId: number, targetType: string): Promise<Connection[]> {
+    try {
+      return await db
+        .select()
+        .from(connections)
+        .where(
+          and(
+            eq(connections.targetId, targetId),
+            eq(connections.targetType, targetType)
+          )
+        );
+    } catch (error) {
+      console.error(`Error getting connections for target ${targetType}-${targetId}:`, error);
+      return [];
+    }
+  }
+
+  async createConnection(connection: InsertConnection): Promise<Connection> {
+    try {
+      // Check if connection already exists
+      const existing = await db
+        .select()
+        .from(connections)
+        .where(
+          and(
+            eq(connections.sourceId, connection.sourceId),
+            eq(connections.sourceType, connection.sourceType),
+            eq(connections.targetId, connection.targetId),
+            eq(connections.targetType, connection.targetType)
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Increase strength if it exists
+        const [updatedConn] = await db
+          .update(connections)
+          .set({
+            strength: (existing[0].strength || 1) + 1,
+          })
+          .where(eq(connections.id, existing[0].id))
+          .returning();
+
+        return updatedConn;
+      }
+
+      const [newConnection] = await db
+        .insert(connections)
+        .values({
+          sourceId: connection.sourceId,
+          sourceType: connection.sourceType,
+          targetId: connection.targetId,
+          targetType: connection.targetType,
+          relationshipType: connection.relationshipType,
+          strength: connection.strength || 1,
+          createdAt: new Date().toISOString(),
+        })
+        .returning();
+
+      // Create activity for connection creation
+      this.createActivity({
+        action: "created_connection",
+        entityId: newConnection.id,
+        entityType: "connection",
+        metadata: { 
+          sourceId: connection.sourceId, 
+          sourceType: connection.sourceType,
+          targetId: connection.targetId,
+          targetType: connection.targetType
+        }
+      });
+
+      return newConnection;
+    } catch (error) {
+      console.error("Error creating connection:", error);
+      throw error;
+    }
+  }
+
+  async updateConnection(id: number, connection: Partial<InsertConnection>): Promise<Connection | undefined> {
+    try {
+      const [updatedConnection] = await db
+        .update(connections)
+        .set(connection)
+        .where(eq(connections.id, id))
+        .returning();
+
+      return updatedConnection;
+    } catch (error) {
+      console.error(`Error updating connection with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteConnection(id: number): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(connections)
+        .where(eq(connections.id, id))
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting connection with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Daily Prompts
+  async getDailyPrompts(): Promise<DailyPrompt[]> {
+    try {
+      return await db
+        .select()
+        .from(dailyPrompts)
+        .orderBy(desc(dailyPrompts.createdAt));
+    } catch (error) {
+      console.error("Error getting daily prompts:", error);
+      return [];
+    }
+  }
+
+  async getDailyPrompt(id: number): Promise<DailyPrompt | undefined> {
+    try {
+      const [prompt] = await db
+        .select()
+        .from(dailyPrompts)
+        .where(eq(dailyPrompts.id, id))
+        .limit(1);
+
+      return prompt;
+    } catch (error) {
+      console.error(`Error getting daily prompt with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getLatestDailyPrompt(): Promise<DailyPrompt | undefined> {
+    try {
+      const [prompt] = await db
+        .select()
+        .from(dailyPrompts)
+        .orderBy(desc(dailyPrompts.date))
+        .limit(1);
+
+      return prompt;
+    } catch (error) {
+      console.error("Error getting latest daily prompt:", error);
+      return undefined;
+    }
+  }
+
+  async createDailyPrompt(prompt: InsertDailyPrompt): Promise<DailyPrompt> {
+    try {
+      const [newPrompt] = await db
+        .insert(dailyPrompts)
+        .values({
+          prompt: prompt.prompt || "",
+          answer: prompt.answer,
+          date: new Date(),
+          isAnswered: false
+        })
+        .returning();
+
+      return newPrompt;
+    } catch (error) {
+      console.error("Error creating daily prompt:", error);
+      throw error;
+    }
+  }
+
+  async updateDailyPrompt(id: number, prompt: Partial<DailyPrompt>): Promise<DailyPrompt | undefined> {
+    try {
+      const [updatedPrompt] = await db
+        .update(dailyPrompts)
+        .set(prompt)
+        .where(eq(dailyPrompts.id, id))
+        .returning();
+
+      return updatedPrompt;
+    } catch (error) {
+      console.error(`Error updating daily prompt with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteDailyPrompt(id: number): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(dailyPrompts)
+        .where(eq(dailyPrompts.id, id))
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting daily prompt with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Activities
+  async getActivities(limit?: number): Promise<Activity[]> {
+    try {
+      let query = db
+        .select()
+        .from(activities)
+        .orderBy(desc(activities.timestamp));
+
+      if (limit) {
+        query = query.limit(limit);
+      }
+
+      return await query;
+    } catch (error) {
+      console.error("Error getting activities:", error);
+      return [];
+    }
+  }
+
+  async getActivity(id: number): Promise<Activity | undefined> {
+    try {
+      const [activity] = await db
+        .select()
+        .from(activities)
+        .where(eq(activities.id, id))
+        .limit(1);
+
+      return activity;
+    } catch (error) {
+      console.error(`Error getting activity with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createActivity(activity: InsertActivity): Promise<Activity> {
+    try {
+      const [newActivity] = await db
+        .insert(activities)
+        .values({
+          action: activity.action,
+          entityId: activity.entityId,
+          entityType: activity.entityType,
+          metadata: activity.metadata,
+          timestamp: activity.timestamp || new Date().toISOString(),
+        })
+        .returning();
+
+      return newActivity;
+    } catch (error) {
+      console.error("Error creating activity:", error);
+      throw error;
+    }
+  }
+
+  async deleteActivity(id: number): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(activities)
+        .where(eq(activities.id, id))
+        .returning();
+
+      return result.length > 0;
+    } catch (error) {
+      console.error(`Error deleting activity with id ${id}:`, error);
+      return false;
+    }
+  }
+
+  // Graph Data
+  async getGraphData(): Promise<{ nodes: any[], links: any[] }> {
+    try {
+      // Fetch all notes with their tags
+      const notesResult = await db
+        .select()
+        .from(notes)
+        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
+        .leftJoin(tags, eq(noteTags.tagId, tags.id));
+
+      // Fetch all links with their tags
+      const linksData = await db
+        .select()
+        .from(links)
+        .leftJoin(linkTags, eq(links.id, linkTags.linkId))
+        .leftJoin(tags, eq(linkTags.tagId, tags.id));
+
+      // Fetch all connections
+      const connectionsResult = await db
+        .select()
+        .from(connections);
+
+      // Group notes and their tags
+      const notesMap = new Map<number, { note: Note, tags: Tag[] }>();
+      notesResult.forEach(row => {
+        if (!row.notes) return;
+        
+        if (!notesMap.has(row.notes.id)) {
+          notesMap.set(row.notes.id, { note: row.notes, tags: [] });
+        }
+        
+        if (row.tags) {
+          const noteData = notesMap.get(row.notes.id)!;
+          if (!noteData.tags.some(t => t.id === row.tags!.id)) {
+            noteData.tags.push(row.tags);
+          }
+        }
+      });
+
+      // Group links and their tags
+      const linksMap = new Map<number, { link: Link, tags: Tag[] }>();
+      linksData.forEach(row => {
+        if (!row.links) return;
+        
+        if (!linksMap.has(row.links.id)) {
+          linksMap.set(row.links.id, { link: row.links, tags: [] });
+        }
+        
+        if (row.tags) {
+          const linkData = linksMap.get(row.links.id)!;
+          if (!linkData.tags.some(t => t.id === row.tags!.id)) {
+            linkData.tags.push(row.tags);
+          }
+        }
+      });
+
+      const nodes: any[] = [];
+      const links: any[] = [];
+
+      // Add notes as nodes
+      Array.from(notesMap.values()).forEach(({ note, tags }) => {
+        nodes.push({
+          id: `note-${note.id}`,
+          label: note.title,
+          type: 'note',
+          data: note,
+          tags
+        });
+      });
+
+      // Add links as nodes
+      Array.from(linksMap.values()).forEach(({ link, tags }) => {
+        nodes.push({
+          id: `link-${link.id}`,
+          label: link.title,
+          type: 'link',
+          data: link,
+          tags
+        });
+      });
+
+      // Add all tags as nodes
+      const allTags = await db.select().from(tags);
+      allTags.forEach(tag => {
+        nodes.push({
+          id: `tag-${tag.id}`,
+          label: tag.name,
+          type: 'tag',
+          data: tag
+        });
+      });
+
+      // Add connections as links
+      connectionsResult.forEach(connection => {
+        links.push({
+          id: `connection-${connection.id}`,
+          source: `${connection.sourceType}-${connection.sourceId}`,
+          target: `${connection.targetType}-${connection.targetId}`,
+          label: connection.relationshipType || '',
+          data: connection
+        });
+      });
+
+      // Add note-tag relationships
+      const noteTagsResult = await db.select().from(noteTags);
+      noteTagsResult.forEach(noteTag => {
+        links.push({
+          id: `notetag-${noteTag.id}`,
+          source: `note-${noteTag.noteId}`,
+          target: `tag-${noteTag.tagId}`,
+          label: 'has_tag',
+          data: { type: 'tag_relationship' }
+        });
+      });
+
+      // Add link-tag relationships
+      const linkTagsResult = await db.select().from(linkTags);
+      linkTagsResult.forEach(linkTag => {
+        links.push({
+          id: `linktag-${linkTag.id}`,
+          source: `link-${linkTag.linkId}`,
+          target: `tag-${linkTag.tagId}`,
+          label: 'has_tag',
+          data: { type: 'tag_relationship' }
+        });
+      });
+
+      return { nodes, links };
+    } catch (error) {
+      console.error("Error getting graph data:", error);
+      return { nodes: [], links: [] };
+    }
+  }
+}
+
+// Create some default tags
+async function createDefaultTags() {
+  const defaultTags = [
+    { name: "Research", color: "#805AD5" },
+    { name: "Projects", color: "#48BB78" },
+    { name: "Ideas", color: "#F56565" },
+    { name: "Reading List", color: "#ECC94B" },
+  ];
+
+  try {
+    for (const tag of defaultTags) {
+      const existing = await db
+        .select()
+        .from(tags)
+        .where(sql`lower(${tags.name}) = lower(${tag.name})`)
+        .limit(1);
+
+      if (existing.length === 0) {
+        await db.insert(tags).values(tag);
+      }
+    }
+    console.log("Created default tags");
+  } catch (error) {
+    console.error("Error creating default tags:", error);
+  }
+}
+
+createDefaultTags();
+
+export const storage = new DatabaseStorage();
