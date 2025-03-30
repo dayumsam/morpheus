@@ -32,11 +32,19 @@ export default function NotesPage() {
   
   // Extract tag ID from URL if present
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tagId = urlParams.get('tagId');
-    if (tagId) {
-      setSelectedTagId(parseInt(tagId));
-    } else {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tagId = urlParams.get('tagId');
+      if (tagId) {
+        const numericTagId = parseInt(tagId);
+        setSelectedTagId(numericTagId);
+        console.log("Set selected tag ID to:", numericTagId);
+      } else {
+        setSelectedTagId(null);
+        console.log("Cleared selected tag ID");
+      }
+    } catch (error) {
+      console.error("Error parsing tagId:", error);
       setSelectedTagId(null);
     }
   }, [location]);

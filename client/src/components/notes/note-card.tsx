@@ -33,7 +33,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg font-semibold">{note.title}</CardTitle>
           <div className="flex space-x-1">
-            <Link href={`/notes/${note.id}/edit`}>
+            <Link to={`/notes/${note.id}/edit`}>
               <Button variant="ghost" size="icon">
                 <Edit className="h-4 w-4" />
               </Button>
@@ -59,10 +59,10 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
               {formatDistance(updatedAt, new Date(), { addSuffix: true })}
             </span>
           </div>
-          <Link href={`/notes/${note.id}`}>
-            <button className="text-accent hover:text-secondary hover:underline">
+          <Link to={`/notes/${note.id}`}>
+            <span className="text-accent hover:text-secondary hover:underline cursor-pointer">
               View
-            </button>
+            </span>
           </Link>
         </div>
         

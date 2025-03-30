@@ -29,7 +29,17 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    // Handle multi-part query keys (like ['/api/tags', tagId, 'notes'])
+    let url = queryKey[0] as string;
+    
+    // If this is a tag-notes query, construct the URL properly
+    if (queryKey.length > 2 && queryKey[0] === '/api/tags' && queryKey[2] === 'notes') {
+      url = `/api/tags/${queryKey[1]}/notes`;
+    }
+    
+    console.log("Fetching from URL:", url);
+    
+    const res = await fetch(url, {
       credentials: "include",
     });
 
