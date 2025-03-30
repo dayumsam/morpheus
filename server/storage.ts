@@ -747,8 +747,8 @@ export class DatabaseStorage implements IStorage {
         .values({
           title: note.title,
           content: note.content,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
         })
         .returning();
 
@@ -811,7 +811,7 @@ export class DatabaseStorage implements IStorage {
         .update(notes)
         .set({
           ...note,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date(),
         })
         .where(eq(notes.id, id))
         .returning();
@@ -1017,8 +1017,8 @@ export class DatabaseStorage implements IStorage {
           url: link.url,
           description: link.description,
           imageUrl: link.imageUrl,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
         })
         .returning();
 
@@ -1079,7 +1079,7 @@ export class DatabaseStorage implements IStorage {
         .update(links)
         .set({
           ...link,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date(),
         })
         .where(eq(links.id, id))
         .returning();
@@ -1542,7 +1542,7 @@ export class DatabaseStorage implements IStorage {
           targetType: connection.targetType,
           relationshipType: connection.relationshipType,
           strength: connection.strength || 1,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date(),
         })
         .returning();
 
@@ -1729,7 +1729,7 @@ export class DatabaseStorage implements IStorage {
           entityId: activity.entityId,
           entityType: activity.entityType,
           metadata: activity.metadata,
-          timestamp: activity.timestamp || new Date().toISOString(),
+          timestamp: activity.timestamp || new Date(),
         })
         .returning();
 
@@ -1766,7 +1766,11 @@ export class DatabaseStorage implements IStorage {
 
       // Fetch all links with their tags
       const linksData = await db
-        .select()
+        .select({
+          links: links,
+          tags: tags,
+          link_tags: linkTags
+        })
         .from(links)
         .leftJoin(linkTags, eq(links.id, linkTags.linkId))
         .leftJoin(tags, eq(linkTags.tagId, tags.id));

@@ -27,15 +27,15 @@ export async function generateTagsFromContent(content: string): Promise<string[]
         {
           role: "system",
           content: `You are a tag extraction system for a knowledge graph application. 
-          Your task is to analyze the provided text and suggest the top 3 most relevant tags.
+          Your task is to analyze the provided text and suggest exactly 3 relevant tags.
           
           Here are the existing tags in the system: ${existingTagNames.join(", ")}
           
           IMPORTANT INSTRUCTIONS:
-          1. Only suggest at most 3 tags.
-          2. Prioritize using existing tags whenever relevant to maintain consistency.
-          3. If the content is closely related to existing tags, use those rather than creating new ones.
-          4. Only suggest new tags if none of the existing tags adequately capture an important aspect of the content.
+          1. Always suggest exactly 3 tags.
+          2. Select two tags from the existing tags list whenever possible.
+          3. Always create one new tag that captures a unique aspect of the content not covered by existing tags.
+          4. The new tag should be short, concise, and descriptive.
           5. Format your response as a JSON object with a "tags" array containing your suggestions.`
         },
         {
@@ -74,15 +74,15 @@ export async function generateTagsFromMarkdown(markdown: string): Promise<string
         {
           role: "system",
           content: `You are a tag extraction system for a knowledge graph application. 
-          Your task is to analyze the provided markdown content and suggest the top 3 most relevant tags.
+          Your task is to analyze the provided markdown content and suggest exactly 3 relevant tags.
           
           Here are the existing tags in the system: ${existingTagNames.join(", ")}
           
           IMPORTANT INSTRUCTIONS:
-          1. Only suggest at most 3 tags.
-          2. Prioritize using existing tags whenever relevant to maintain consistency.
-          3. If the content is closely related to existing tags, use those rather than creating new ones.
-          4. Only suggest new tags if none of the existing tags adequately capture an important aspect of the content.
+          1. Always suggest exactly 3 tags.
+          2. Select two tags from the existing tags list whenever possible.
+          3. Always create one new tag that captures a unique aspect of the content not covered by existing tags.
+          4. The new tag should be short, concise, and descriptive.
           5. Format your response as a JSON object with a "tags" array containing your suggestions.`
         },
         {
