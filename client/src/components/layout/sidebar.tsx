@@ -38,7 +38,7 @@ export default function Sidebar({ className = "" }: SidebarProps) {
 
   // Define loading state manually to avoid circular reference
   const [isLoadingTags, setIsLoadingTags] = useState(true);
-  
+
   // Ensure we fetch tags immediately when the sidebar mounts
   useEffect(() => {
     console.log("[Sidebar] Initializing and triggering immediate tags fetch");
@@ -46,12 +46,13 @@ export default function Sidebar({ className = "" }: SidebarProps) {
 
     // Always force an immediate fetch to ensure tags are loaded
     setIsLoadingTags(true);
-    queryClient.fetchQuery({
-      queryKey: tagsQueryKey,
-      staleTime: 60 * 1000, // 1 minute
-    })
-    .then(() => setIsLoadingTags(false))
-    .catch(() => setIsLoadingTags(false));
+    queryClient
+      .fetchQuery({
+        queryKey: tagsQueryKey,
+        staleTime: 60 * 1000, // 1 minute
+      })
+      .then(() => setIsLoadingTags(false))
+      .catch(() => setIsLoadingTags(false));
   }, [queryClient]);
 
   // Fetch tags for sidebar
@@ -124,9 +125,9 @@ export default function Sidebar({ className = "" }: SidebarProps) {
         <div className="flex items-center">
           <Link to="/">
             <div className="w-8 h-8 flex items-center justify-center">
-              <img 
-                src={morpheusLogo} 
-                alt="Morpheus Logo" 
+              <img
+                src={morpheusLogo}
+                alt="Morpheus Logo"
                 className="h-8 w-8 object-contain"
               />
             </div>
@@ -254,8 +255,8 @@ export default function Sidebar({ className = "" }: SidebarProps) {
           </div>
           {!collapsed && (
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-800">User</p>
-              <p className="text-xs text-gray-500">user@example.com</p>
+              <p className="text-sm font-medium text-gray-800">Sam Mathew</p>
+              <p className="text-xs text-gray-500">dayumsam22@gmail.com</p>
             </div>
           )}
         </div>
