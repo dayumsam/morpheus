@@ -20,6 +20,12 @@ export async function apiRequest<T = any>(
   });
 
   await throwIfResNotOk(res);
+  
+  // For 204 No Content responses, return an empty object rather than trying to parse JSON
+  if (res.status === 204) {
+    return {} as T;
+  }
+  
   return await res.json();
 }
 
@@ -55,7 +61,12 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    const data = await res.json();
+    
+    // Handle 204 No Content responses
+    let data = {};
+    if (res.status !== 204) {
+      data = await res.json();
+    }
 
     const endTime = performance.now();
     console.log(
