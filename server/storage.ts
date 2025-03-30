@@ -806,26 +806,29 @@ export class DatabaseStorage implements IStorage {
 
       if (!existingNote) return undefined;
 
+      // Create update data without tags field (handled separately)
+      const { tags: tagIds, ...updateData } = note;
+
       // Update note
       const [updatedNote] = await db
         .update(notes)
         .set({
-          ...note,
+          ...updateData,
           updatedAt: new Date(),
         })
         .where(eq(notes.id, id))
         .returning();
 
       // Update tags if provided
-      let noteTags: Tag[] = [];
-      if (note.tags !== undefined) {
+      let tagsList: Tag[] = [];
+      if (tagIds !== undefined) {
         // Delete existing note-tag relationships
         await db
           .delete(noteTags)
           .where(eq(noteTags.noteId, id));
 
         // Add new note-tag relationships
-        for (const tagId of note.tags) {
+        for (const tagId of tagIds) {
           const [tag] = await db
             .select()
             .from(tags)
@@ -840,7 +843,7 @@ export class DatabaseStorage implements IStorage {
                 tagId,
               });
 
-            noteTags.push(tag);
+            tagsList.push(tag);
           }
         }
       } else {
@@ -851,7 +854,7 @@ export class DatabaseStorage implements IStorage {
           .innerJoin(noteTags, eq(tags.id, noteTags.tagId))
           .where(eq(noteTags.noteId, id));
 
-        noteTags = tagsResult.map(row => row.tags);
+        tagsList = tagsResult.map(row => row.tags);
       }
 
       // Create activity for note update
@@ -864,7 +867,7 @@ export class DatabaseStorage implements IStorage {
 
       return {
         ...updatedNote,
-        tags: noteTags,
+        tags: tagsList,
       };
     } catch (error) {
       console.error(`Error updating note with id ${id}:`, error);
