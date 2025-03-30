@@ -103,8 +103,8 @@ export default function Sidebar({ className = '' }: SidebarProps) {
           )}
           <div className="mt-3 space-y-1">
             {navItems.map((item) => (
-              <Link key={item.path} href={item.path}>
-                <a
+              <Link key={item.path} to={item.path}>
+                <div
                   className={`flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                     location === item.path
                       ? 'bg-gray-100 text-primary'
@@ -113,7 +113,7 @@ export default function Sidebar({ className = '' }: SidebarProps) {
                 >
                   {item.icon}
                   {!collapsed && <span className="ml-2">{item.label}</span>}
-                </a>
+                </div>
               </Link>
             ))}
           </div>
@@ -126,14 +126,14 @@ export default function Sidebar({ className = '' }: SidebarProps) {
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 TAGS
               </h2>
-              <Link href="/tags">
-                <a className="text-xs text-primary hover:underline">Manage</a>
+              <Link to="/tags">
+                <span className="text-xs text-primary hover:underline cursor-pointer">Manage</span>
               </Link>
             </div>
             <div className="mt-3 space-y-1">
               {tags.map((tag: any) => (
-                <Link key={tag.id} href={`/notes?tagId=${tag.id}`}>
-                  <a className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary">
+                <Link key={tag.id} to={`/notes?tagId=${tag.id}`}>
+                  <div className="flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-primary cursor-pointer">
                     <div className="flex items-center">
                       <span className={`w-2 h-2 rounded-full mr-2`} style={{ backgroundColor: tag.color }}></span>
                       <span>{tag.name}</span>
@@ -141,7 +141,7 @@ export default function Sidebar({ className = '' }: SidebarProps) {
                     <span className="text-xs text-gray-400">
                       {tag.count || 0}
                     </span>
-                  </a>
+                  </div>
                 </Link>
               ))}
             </div>
