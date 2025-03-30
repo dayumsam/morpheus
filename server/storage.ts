@@ -640,7 +640,7 @@ export class MemStorage implements IStorage {
     // Add connections as links
     const allConnections = await this.getConnections();
     for (const connection of allConnections) {
-      links.push({
+      graphLinks.push({
         source: `${connection.sourceType}-${connection.sourceId}`,
         target: `${connection.targetType}-${connection.targetId}`,
         strength: connection.strength
@@ -1814,8 +1814,9 @@ export class DatabaseStorage implements IStorage {
         }
       });
 
+      // Define graph data arrays first to avoid variable name collisions
       const nodes: any[] = [];
-      const links: any[] = [];
+      const graphLinks: any[] = [];
 
       // Add notes as nodes
       Array.from(notesMap.values()).forEach(({ note, tags }) => {
@@ -1852,7 +1853,7 @@ export class DatabaseStorage implements IStorage {
 
       // Add connections as links
       connectionsResult.forEach(connection => {
-        links.push({
+        graphLinks.push({
           id: `connection-${connection.id}`,
           source: `${connection.sourceType}-${connection.sourceId}`,
           target: `${connection.targetType}-${connection.targetId}`,
@@ -1864,7 +1865,7 @@ export class DatabaseStorage implements IStorage {
       // Add note-tag relationships
       const noteTagsResult = await db.select().from(noteTags);
       noteTagsResult.forEach(noteTag => {
-        links.push({
+        graphLinks.push({
           id: `notetag-${noteTag.id}`,
           source: `note-${noteTag.noteId}`,
           target: `tag-${noteTag.tagId}`,
@@ -1876,7 +1877,7 @@ export class DatabaseStorage implements IStorage {
       // Add link-tag relationships
       const linkTagsResult = await db.select().from(linkTags);
       linkTagsResult.forEach(linkTag => {
-        links.push({
+        graphLinks.push({
           id: `linktag-${linkTag.id}`,
           source: `link-${linkTag.linkId}`,
           target: `tag-${linkTag.tagId}`,
@@ -1885,7 +1886,7 @@ export class DatabaseStorage implements IStorage {
         });
       });
 
-      return { nodes, links };
+      return { nodes, links: graphLinks };
     } catch (error) {
       console.error("Error getting graph data:", error);
       return { nodes: [], links: [] };

@@ -7,7 +7,7 @@ import Text from '@tiptap/extension-text';
 import Heading from '@tiptap/extension-heading';
 import Link from '@tiptap/extension-link';
 import { Button } from '@/components/ui/button';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Bold, 
   Italic, 
@@ -87,53 +87,31 @@ const MenuBar = ({
     editor.commands.insertContentAt(0, frontmatter);
   }, [editor]);
 
-  const showTagPopover = useCallback(() => {
-    if (!tags || tags.length === 0 || !onTagSelect) return;
-    
-    // Create a simple dropdown for tags
-    const div = document.createElement('div');
-    div.className = 'fixed bg-white shadow-lg rounded p-2 z-50';
-    div.style.top = '100px';
-    div.style.right = '20px';
-    
-    const tagsList = document.createElement('div');
-    tagsList.className = 'space-y-1';
-    
-    tags.forEach((tag) => {
-      const tagItem = document.createElement('div');
-      tagItem.className = 'flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer rounded';
-      
-      const tagColor = document.createElement('span');
-      tagColor.className = 'w-3 h-3 rounded-full';
-      tagColor.style.backgroundColor = tag.color;
-      
-      const tagName = document.createElement('span');
-      tagName.textContent = tag.name;
-      
-      tagItem.appendChild(tagColor);
-      tagItem.appendChild(tagName);
-      
-      tagItem.addEventListener('click', () => {
-        onTagSelect(tag.id);
-        document.body.removeChild(div);
-      });
-      
-      tagsList.appendChild(tagItem);
-    });
-    
-    div.appendChild(tagsList);
-    document.body.appendChild(div);
-    
-    // Close when clicking outside
+  const [showTagPopover, setShowTagPopover] = useState(false);
+  const tagPopoverRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (!div.contains(e.target as Node)) {
-        document.body.removeChild(div);
-        document.removeEventListener('mousedown', handleClickOutside);
+      if (tagPopoverRef.current && !tagPopoverRef.current.contains(e.target as Node)) {
+        setShowTagPopover(false);
       }
     };
     
-    document.addEventListener('mousedown', handleClickOutside);
-  }, [tags, onTagSelect]);
+    if (showTagPopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTagPopover]);
+  
+  const handleTagSelect = useCallback((tagId: number) => {
+    if (onTagSelect) {
+      onTagSelect(tagId);
+      setShowTagPopover(false);
+    }
+  }, [onTagSelect]);
 
   return (
     <div className="flex flex-wrap items-center border-b p-2 bg-gray-50 rounded-t-md gap-1">
@@ -262,15 +240,41 @@ const MenuBar = ({
       <div className="flex-1"></div>
       
       {tags && tags.length > 0 && onTagSelect && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={showTagPopover}
-          title="Add Tag"
-        >
-          <Tag className="h-4 w-4" />
-        </Button>
+        <div className="relative">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTagPopover(!showTagPopover)}
+            title="Add Tag"
+          >
+            <Tag className="h-4 w-4" />
+          </Button>
+          
+          {showTagPopover && (
+            <div 
+              ref={tagPopoverRef}
+              className="absolute top-full right-0 mt-1 z-50 bg-white rounded-md shadow-lg border p-2 w-48"
+            >
+              <div className="text-sm font-medium text-gray-700 mb-1 px-2">Add Tag</div>
+              <div className="space-y-1 max-h-52 overflow-y-auto">
+                {tags.map((tag) => (
+                  <div
+                    key={tag.id}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
+                    onClick={() => handleTagSelect(tag.id)}
+                  >
+                    <span 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span>{tag.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
       
       <Button
