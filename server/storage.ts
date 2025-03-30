@@ -708,31 +708,45 @@ export class DatabaseStorage implements IStorage {
 
   async getNote(id: number): Promise<Note | undefined> {
     try {
-      const result = await db
+      console.log(`Fetching note with id ${id}`);
+      
+      // First, get the note
+      const [noteResult] = await db
         .select()
         .from(notes)
-        .leftJoin(noteTags, eq(notes.id, noteTags.noteId))
-        .leftJoin(tags, eq(noteTags.tagId, tags.id))
         .where(eq(notes.id, id));
+      
+      if (!noteResult) {
+        console.log(`Note with id ${id} not found`);
+        return undefined;
+      }
+      
+      console.log(`Found note with id ${id}:`, noteResult);
 
-      if (result.length === 0) return undefined;
-
-      const note = result[0].notes;
-      if (!note) return undefined;
-
-      const noteTags: Tag[] = [];
-      result.forEach(row => {
-        if (row.tags) {
-          // Check if this tag is already in the tags array
-          if (!noteTags.some(t => t.id === row.tags!.id)) {
-            noteTags.push(row.tags);
-          }
+      // Then, get tags for this note
+      const tagResults = await db
+        .select({
+          tag: tags
+        })
+        .from(noteTags)
+        .leftJoin(tags, eq(noteTags.tagId, tags.id))
+        .where(eq(noteTags.noteId, id));
+      
+      console.log(`Found ${tagResults.length} tags for note ${id}`);
+      
+      // Extract unique tags
+      const noteTagsList: Tag[] = [];
+      tagResults.forEach(row => {
+        if (row.tag && !noteTagsList.some(t => t.id === row.tag.id)) {
+          noteTagsList.push(row.tag);
         }
       });
 
+      console.log(`Returning note with ${noteTagsList.length} tags`);
+      
       return {
-        ...note,
-        tags: noteTags,
+        ...noteResult,
+        tags: noteTagsList,
       };
     } catch (error) {
       console.error(`Error getting note with id ${id}:`, error);
